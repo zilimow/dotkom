@@ -11,48 +11,77 @@ from database.db_manager import (
 # Настройка страницы
 st.set_page_config(page_title="Учет работ техники", layout="wide")
 
-def local_css(file_name):
-    with open(file_name, "r", encoding="utf-8") as f:
-        st.html(f"<style>{f.read()}</style>")
 
-local_css("data/style.css")
+def local_css(file_name):
+    """Загрузка """
+    try:
+        with open(file_name, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning(f"Файл {file_name} не найден. Используются стандартные стили.")
+
+# Проверка наличия CSS файла
+try:
+    local_css("data/style.css")
+except:
+    pass
+
+
 init_db()
 
 # Загрузка актуальных данных
 df_logs = load_data_as_df()
 df_machines = load_machinery_registry()
 
+# Конвертируем дату для правильного отображения календаря
+if not df_logs.empty and 'date' in df_logs.columns:
+    df_logs['date'] = pd.to_datetime(df_logs['date'])
+
 # Шапка главной страницы
 st.title("Система управления парком техники")
-st.divider()
 
 # Создаем глобальные вкладки для разделения системы
-tab_logs, tab_registry = st.tabs(["📋 Журнал учета работ", "🚜 Справочник техники (Паспорта)"])
+tab_logs, tab_equipment, tab_tools, tab_parts, tab_mechanics = st.tabs(["Работы", "Техника", "Инструменты", "Запчасти", "Механики"])
 
 
 # =====================================================================
 # ВКЛАДКА 1: ЖУРНАЛ УЧЕТА РАБОТ
 # =====================================================================
 with tab_logs:
-    # (Здесь остается ваш логический блок по вводу работ и таблице поиска работ)
-    # Конфигурация колонок работ
+       # Конфигурация колонок работ
     rus_logs_config = {
-        "id": None, "date": st.column_config.DateColumn("Дата работы", format="DD.MM.YYYY"),
-        "tech_type": st.column_config.TextColumn("Тип техники"), "model": st.column_config.TextColumn("Модель / Номер"),
-        "work_done": st.column_config.TextColumn("Описание работ"), "hours": st.column_config.NumberColumn("Часы", format="%.1f"),
-        "driver": st.column_config.TextColumn("Машинист"), "status": st.column_config.TextColumn("Статус")
+        "id": None, 
+        "date": st.column_config.DateColumn("Дата работы", format="DD.MM.YYYY", step="day"),
+        "tech_type": st.column_config.TextColumn("Тип техники"), 
+        "model": st.column_config.TextColumn("Модель / Номер"),
+        "work_done": st.column_config.TextColumn("Описание работ"), 
+        "hours": st.column_config.NumberColumn("Часы", format="%.0f"),
+        "driver": st.column_config.TextColumn("Машинист"), 
+        "status": st.column_config.TextColumn("Статус")
     }
     
     with st.expander("Добавить новую запись о работе техники", expanded=False):
         with st.form("add_record_form", clear_on_submit=True):
             col_date, col_type, col_model, col_hours = st.columns(4)
-            with col_date: input_date = st.date_input("Дата работы:", datetime.now(), key="log_date")
+            
+            with col_date: input_date = st.date_input("Дата работы:", datetime.now(), format="DD.MM.YYYY", key="log_date", )
             with col_type: input_type = st.selectbox("Тип техники:", ["Экскаватор", "Самосвал", "Бульдозер", "Погрузчик", "Другое"], key="log_type")
             with col_model: input_model = st.text_input("Модель / Номер машины:", placeholder="например, CAT 320", key="log_model")
             with col_hours: input_hours = st.number_input("Моточасы / Часы работы:", min_value=0.0, step=0.5, key="log_hours")
             
             col_driver, col_status = st.columns(2)
-            with col_driver: input_driver = st.text_input("ФИО Машиниста:", placeholder="Иванов И.И.", key="log_driver")
+            with col_driver: 
+                # Получаем список механиков
+                df_mechanics = load_mechanics()
+                mechanics_list = df_mechanics['full_name'].tolist() if not df_mechanics.empty else []
+                
+                input_driver = st.selectbox(
+                    "ФИО Механика:", 
+                    options=mechanics_list,
+                    placeholder="Начните вводить имя механика...",
+                    key="log_driver"
+    )
+    
             with col_status: input_status = st.selectbox("Статус техники:", ["В работе (Исправна)", "Требует ТО", "В ремонте"], key="log_status")
             
             input_work = st.text_area("Описание проделанной работы:", placeholder="Что именно было сделано...", key="log_work")
@@ -85,48 +114,70 @@ with tab_logs:
             final_logs = final_logs[~final_logs['id'].isin(df_logs_display['id'])]
             final_logs = pd.concat([final_logs, edited_logs], ignore_index=True)
             update_db_from_df(final_logs)
+            # КОНВЕРТАЦИЯ ЗДЕСЬ - перед сохранением
+            if 'date' in final_logs.columns:
+                final_logs['date'] = pd.to_datetime(final_logs['date']).dt.strftime("%Y-%m-%d")
+
             st.success("Журнал работ обновлен!")
             st.rerun()
 
 
+
+
 # =====================================================================
-# НОВАЯ ВКЛАДКА 2: СПРАВОЧНИК ТЕХНИКИ
+# ВКЛАДКА 2: ТЕХНИКА
 # =====================================================================
-with tab_registry:
-    st.subheader("Управление реестром машин")
-    
+with tab_equipment:
+        
     # Настройка русских заголовков для новой таблицы справочника
     rus_machinery_config = {
         "id": None,
         "board_number": st.column_config.TextColumn("Бортовой номер"),
-        "serial_number": st.column_config.TextColumn("Серийный номер (VIN)"),
-        "model": st.column_config.TextColumn("Модель техники"),
-        "prod_year": st.column_config.NumberColumn("Год производства", format="%d"),
         "tech_type": st.column_config.TextColumn("Тип техники"),
+        "model": st.column_config.TextColumn("Модель техники"),
+        "serial_number": st.column_config.TextColumn("Серийный номер (VIN)"),        
+        "prod_year": st.column_config.NumberColumn("Год производства", format="%d"),
         "engine_model": st.column_config.TextColumn("Модель двигателя"),
         "engine_number": st.column_config.TextColumn("Номер двигателя"),
         "linkone_code": st.column_config.TextColumn("Код LinkOne")
     }
 
     # 1. Меню добавления новой единицы техники (Expander)
-    with st.expander("Внести новую единицу техники в справочник", expanded=False):
+    with st.expander("Внести новую единицу в справочник по технике", expanded=False):   
         with st.form("add_machine_form", clear_on_submit=True):
             
             # Строка 1: Основные параметры в процентах [20%, 30%, 35%, 15%]
-            m_col1, m_col2, m_col3, m_col4 = st.columns([20, 30, 35, 15])
+            m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns([10, 30, 35, 15, 10])
             with m_col1:
-                m_board = st.text_input("Бортовой номер:", placeholder="например, Э-05, С-12")
+                m_board = st.text_input("Бортовой номер:", placeholder="например, 38")
             with m_col2:
-                m_serial = st.text_input("Серийный номер:")
+                m_type = st.selectbox("Тип техники:", ["Экскаватор", "Самосвал", "Бульдозер", "Погрузчик", "Другое"], key="reg_type_select")
             with m_col3:
-                m_model = st.text_input("Модель техники:", placeholder="например, Komatsu PC300")
+                # m_model = st.text_input("Модель техники:", placeholder="например, HD785-7")
+            # Получаем уникальные модели из базы
+                df_machines = load_machinery_registry()
+                models = df_machines['model'].unique().tolist() if not df_machines.empty else []
+        
+                m_model = st.selectbox(
+                    "Модель техники:", 
+                    options=models,
+                    placeholder="Выберите или введите новую модель",
+                    index=None  # Не выбирать ничего по умолчанию
+                )
+                
+                # Если нужно сохранить введенное значение
+                if m_model is None:
+                    m_model = st.text_input("Или введите новую модель:", placeholder="например, Новая модель")    
+                    
+                    
             with m_col4:
+                m_serial = st.text_input("Серийный номер:")
+            with m_col5:
                 m_year = st.number_input("Год производства:", min_value=1950, max_value=datetime.now().year, step=1, value=2020)
                 
             # Строка 2: Двигатель и классификация [20%, 30%, 30%, 20%]
             m_col5, m_col6, m_col7, m_col8 = st.columns([20, 30, 30, 20])
-            with m_col5:
-                m_type = st.selectbox("Тип техники:", ["Экскаватор", "Самосвал", "Бульдозер", "Погрузчик", "Другое"], key="reg_type_select")
+            
             with m_col6:
                 m_eng_model = st.text_input("Модель двигателя:")
             with m_col7:
@@ -188,3 +239,57 @@ with tab_registry:
         update_machinery_registry(final_machines)
         st.success("Справочник техники успешно обновлен!")
         st.rerun()
+        
+
+
+# =====================================================================
+# ВКЛАДКА 2: МЕХАНИКИ
+# =====================================================================
+# with tab_mechanics:
+#     | first_name | last_name | position  | crew  | shift | speciality    | phone | hire_date       |
+with tab_mechanics:
+    st.subheader("👨‍🔧 Справочник механиков")
+    
+    # Форма добавления
+    with st.expander("Добавить механика", expanded=False):
+        with st.form("add_mechanic_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                mech_name = st.text_input("ФИО механика:*")
+                mech_specialty = st.text_input("Специализация:", placeholder="например, Двигателист, Электрик")
+            with col2:
+                mech_phone = st.text_input("Телефон:")
+                mech_date = st.date_input("Дата приема:", datetime.now(), format="DD.MM.YYYY")
+            
+            if st.form_submit_button("Добавить механика"):
+                if mech_name.strip():
+                    add_mechanic(mech_name, mech_specialty, mech_phone, mech_date.strftime("%Y-%m-%d"))
+                    st.success(f"Механик {mech_name} добавлен!")
+                    st.rerun()
+                else:
+                    st.error("ФИО обязательно")
+    
+    # Таблица механиков
+    df_mechanics = load_mechanics()
+    if df_mechanics.empty:
+        st.info("Список механиков пуст")
+    else:
+        edited_mechanics = st.data_editor(
+            df_mechanics,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": None,
+                "full_name": "ФИО механика",
+                "specialty": "Специализация",
+                "phone": "Телефон",
+                "hire_date": st.column_config.DateColumn("Дата приема", format="DD.MM.YYYY")
+            },
+            key="mechanics_editor"
+        )
+        
+        if st.button("Сохранить изменения", key="save_mechanics"):
+            update_mechanics(edited_mechanics)
+            st.success("Список механиков обновлен!")
+            st.rerun()

@@ -87,3 +87,40 @@ def update_machinery_registry(df):
     df.to_sql("machinery_registry", conn, if_exists="replace", index=False)
     conn.commit()
     conn.close()
+
+
+
+
+# Добавьте в init_db():
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS mechanics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        specialty TEXT,
+        phone TEXT,
+        hire_date TEXT
+    )
+""")
+
+# Добавьте функции:
+def add_mechanic(full_name, specialty, phone, hire_date):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO mechanics (full_name, specialty, phone, hire_date)
+        VALUES (?, ?, ?, ?)
+    """, (full_name, specialty, phone, hire_date))
+    conn.commit()
+    conn.close()
+
+def load_mechanics():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM mechanics", conn)
+    conn.close()
+    return df
+
+def update_mechanics(df):
+    conn = get_connection()
+    df.to_sql("mechanics", conn, if_exists="replace", index=False)
+    conn.commit()
+    conn.close()
