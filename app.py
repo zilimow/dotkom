@@ -5,7 +5,8 @@ import pandas as pd
 # Импортируем все необходимые функции
 from database.db_manager import (
     init_db, add_record, load_data_as_df, update_db_from_df,
-    add_machine, load_machinery_registry, update_machinery_registry
+    add_machine, load_machinery_registry, update_machinery_registry,
+    add_mechanic, load_mechanics, update_mechanics
 )
 
 # Настройка страницы
@@ -73,8 +74,8 @@ with tab_logs:
             with col_driver: 
                 # Получаем список механиков
                 df_mechanics = load_mechanics()
-                mechanics_list = df_mechanics['full_name'].tolist() if not df_mechanics.empty else []
-                
+                mechanics_list = df_mechanics['name'].tolist() if not df_mechanics.empty else []
+
                 input_driver = st.selectbox(
                     "ФИО Механика:", 
                     options=mechanics_list,
@@ -246,34 +247,95 @@ with tab_equipment:
 # ВКЛАДКА 2: МЕХАНИКИ
 # =====================================================================
 # with tab_mechanics:
-#     | first_name | last_name | position  | crew  | shift | speciality    | phone | hire_date       |
+#     | first_name | last_name | position | crew | expertise | phone | hire_date | experience |
 with tab_mechanics:
-    st.subheader("👨‍🔧 Справочник механиков")
+    st.subheader("Справочник механиков")
     
     # Форма добавления
     with st.expander("Добавить механика", expanded=False):
-        with st.form("add_mechanic_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                mech_name = st.text_input("ФИО механика:*")
-                mech_specialty = st.text_input("Специализация:", placeholder="например, Двигателист, Электрик")
-            with col2:
-                mech_phone = st.text_input("Телефон:")
-                mech_date = st.date_input("Дата приема:", datetime.now(), format="DD.MM.YYYY")
+        with st.form("add_mechanic_form", clear_on_submit=False):
+            col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
             
-            if st.form_submit_button("Добавить механика"):
+            with col1:
+                mech_name = st.text_input("ФИО механика:*", key="mech_name")
+            with col2:
+                mech_position = st.text_input("Должность:")
+            with col3:
+                mech_crew = st.text_input("Бригада:")
+            with col4:
+                mech_expertise = st.text_input("Специализация:")
+            
+            col5, col6, col7 = st.columns([4, 1, 1])
+            
+            with col5:
+                mech_phone = st.text_input("Телефон:")                
+            with col6:
+                mech_date = st.date_input("Дата приема:", value=datetime.now(), format="DD.MM.YYYY")
+            with col7:
+                mech_experience = st.text("Стаж работы:")
+            
+     
+            # Две кнопки в одной строке
+            btn_col1, btn_col2, _, _, _= st.columns([1,1,1,1,1])
+            
+            with btn_col1:
+                submitted = st.form_submit_button("Добавить механика", use_container_width=True)
+            
+            with btn_col2:
+                clear = st.form_submit_button("Очистить поля", use_container_width=True)
+            
+            if submitted:
                 if mech_name.strip():
-                    add_mechanic(mech_name, mech_specialty, mech_phone, mech_date.strftime("%Y-%m-%d"))
+                    add_mechanic(mech_name, mech_position, mech_crew, mech_shift, 
+                                mech_specialty, mech_phone, mech_date.strftime("%Y-%m-%d"))
                     st.success(f"Механик {mech_name} добавлен!")
+                    # Очищаем после успешного добавления
+                    for key in ["name_input", "position_input", "crew_input", "shift_input", 
+                            "specialty_input", "phone_input"]:
+                        if key in st.session_state:
+                            st.session_state[key] = ""
                     st.rerun()
                 else:
                     st.error("ФИО обязательно")
-    
+            
+            if clear:
+                # Очищаем все поля
+                for key in ["name_input", "position_input", "crew_input", "shift_input", 
+                        "specialty_input", "phone_input"]:
+                    if key in st.session_state:
+                        st.session_state[key] = ""
+                st.rerun()
+                
+    with st.expander("Редактировать механика", expanded=False):
+        with st.form("edit_mechanic_form"):
+            # Выбор механика для редактирования
+            df_mechanics = load_mechanics()
+            mechanic_list = df_mechanics['name'].tolist() if not df_mechanics.empty else []
+            
+            selected_mechanic = st.selectbox("Выберите механика:", mechanic_list, key="edit_select")
+            
+            if selected_mechanic:
+                # Загружаем данные выбранного механика
+                mechanic_data = df_mechanics[df_mechanics['name'] == selected_mechanic].iloc[0]
+                
+                # Поля для редактирования
+                edit_name = st.text_input("ФИО:", value=mechanic_data['name'])
+                edit_phone = st.text_input("Телефон:", value=mechanic_data.get('phone', ''))
+                
+                if st.form_submit_button("Сохранить изменения"):
+                    # Логика обновления
+                    st.success("Изменения сохранены!")
+                    st.rerun()
+
+
     # Таблица механиков
     df_mechanics = load_mechanics()
     if df_mechanics.empty:
         st.info("Список механиков пуст")
     else:
+        if "hire_date" in df_mechanics.columns:
+            df_mechanics["hire_date"] = pd.to_datetime(df_mechanics["hire_date"]).dt.date
+
         edited_mechanics = st.data_editor(
             df_mechanics,
             num_rows="dynamic",
@@ -281,7 +343,7 @@ with tab_mechanics:
             hide_index=True,
             column_config={
                 "id": None,
-                "full_name": "ФИО механика",
+                "name": "ФИО механика",
                 "specialty": "Специализация",
                 "phone": "Телефон",
                 "hire_date": st.column_config.DateColumn("Дата приема", format="DD.MM.YYYY")
@@ -290,6 +352,10 @@ with tab_mechanics:
         )
         
         if st.button("Сохранить изменения", key="save_mechanics"):
+            if "hire_date" in edited_mechanics.columns:
+                edited_mechanics["hire_date"] = edited_mechanics["hire_date"].astype(str)
             update_mechanics(edited_mechanics)
             st.success("Список механиков обновлен!")
             st.rerun()
+            
+            

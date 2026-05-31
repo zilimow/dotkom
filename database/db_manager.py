@@ -39,11 +39,25 @@ def init_db():
             linkone_code TEXT
         )
     """)
+
+    # Добавьте в init_db():
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mechanics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            position TEXT,
+            crew TEXT, 
+            expertise TEXT,
+            phone TEXT,
+            hire_date TEXT, 
+            experience TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
 # --- ФУНКЦИИ ДЛЯ ТАБЛИЦЫ РАБОТ ---
-def add_record(date, tech_type, model, work_done, hours, driver, status):
+def add_record(date, tech_type, model, фцвфв, hours, driver, status):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -88,28 +102,13 @@ def update_machinery_registry(df):
     conn.commit()
     conn.close()
 
-
-
-
-# Добавьте в init_db():
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS mechanics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
-        specialty TEXT,
-        phone TEXT,
-        hire_date TEXT
-    )
-""")
-
-# Добавьте функции:
-def add_mechanic(full_name, specialty, phone, hire_date):
+def add_mechanic(name, position, crew, expertise, phone, hire_date, experience):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO mechanics (full_name, specialty, phone, hire_date)
-        VALUES (?, ?, ?, ?)
-    """, (full_name, specialty, phone, hire_date))
+        INSERT INTO mechanics (name, position, crew, expertise, phone, hire_date, experience)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (name, position, crew, expertise, phone, hire_date, experience))
     conn.commit()
     conn.close()
 
