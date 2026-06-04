@@ -32,3 +32,8 @@ uv sync
 
 # Запуск приложения
 uv run streamlit run app.py
+
+
+
+
+

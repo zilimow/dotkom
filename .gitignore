@@ -10,7 +10,7 @@ ENV/
 .venv
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
 
 # Database
 *.db
@@ -29,6 +29,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# UV
-uv.lock

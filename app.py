@@ -1,11 +1,37 @@
 import streamlit as st
+import pandas as pd
 import datetime
 import sqlite3
+
+
+# ==========================================
+# WINDOW ENGINE CONFIGURATIONS & CSS
+# ==========================================
+st.set_page_config(page_title="/", layout="wide", page_icon="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+
+def load_external_css(file_path):
+    """Reads external styles and safely injects them."""
+    try:
+        with open("static/style.css", "r", encoding="utf-8") as file_stream:
+            css_rules = file_stream.read()
+            st.markdown(
+                f"<style>{css_rules}</style>",
+                unsafe_allow_html=True,
+            )
+    except FileNotFoundError:
+        st.error(f"CSS File not found at: {file_path}")
+
+
+# Call the loader pointing to your style asset file path
+load_external_css(".streamlit/style.css")
+
 
 # ==========================================
 # 💾 DATABASE CONTROLLER LAYER
 # ==========================================
 DB_FILE = "fleet_operations.db"
+
+
 
 def init_db():
     """Initializes standard local hardware infrastructure logging tables."""
@@ -55,74 +81,13 @@ def run_query(query, params=()):
 # Initialize localized asset records database tables
 init_db()
 
-# ==========================================
-# 🛠️ WINDOW ENGINE CONFIGURATIONS & CSS
-# ==========================================
-st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown("""
-    <style>
-    /* Completely hide the password eye icon */
-    [data-testid="stTextInput"] button {
-        display: none !important;
-    }
-    [data-testid="stTextInputPasswordFieldVisibilityToken"] {
-        display: none !important;
-    }
-    
-    /* Hide top header deploy and hamburger controls completely */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
-    
-    /* Completely destroy the sidebar frame */
-    [data-testid="stSidebar"], [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-    
-    /* Center canvas breathing padding */
-    .block-container {
-        padding-top: 2rem !important;
-        padding-left: 5rem !important;
-        padding-right: 5rem !important;
-    }
-    
-    /* Change tabs font size for workshop screens */
-    [data-testid="stBaseButton-tab"] p {
-        font-size: 30px !important;   
-        font-weight: 600 !important;  
-    }
-    
-    /* APP ICON BASE ANCHORS */
-    .header-wrapper {
-        display: flex !important;
-        align-items: center !important;
-        gap: 14px !important;
-    }
-
-    /* GUEST MODE STYLE (Muted Flat Slate Gray for Gear Only) */
-    .icon-guest {
-        fill: #64748b !important;
-    }
-
-    /* ADMIN MODE STYLE (Komatsu Blue Gear with Active Yellow Glow Animation) */
-    .icon-admin {
-        fill: #140A9A !important;
-        filter: drop-shadow(0 0 6px rgba(20, 10, 154, 0.4));
-        animation: pulse-glow 2s infinite alternate;
-    }
-
-    @keyframes pulse-glow {
-        0% { filter: drop-shadow(0 0 2px rgba(255, 200, 47, 0.3)); }
-        100% { filter: drop-shadow(0 0 8px rgba(255, 200, 47, 0.8)); }
-    }
-
-    </style>
-""", unsafe_allow_html=True)
 
 # Initialize Session States
 if "role" not in st.session_state:
     st.session_state.role = "guest"
+    
+    
 
 # ==========================================
 # 🚜 MAIN CONTAINER WORKSPACE INTERFACE (PERMANENT BLUE TITLE)
@@ -134,10 +99,10 @@ if st.session_state.role == "admin":
             <svg class="icon-admin" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
                 <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
             </svg>
-            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">FLEET OPERATIONS CENTER</h1>
+            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">АЙТИ НАРЯДКА</h1>
         </div>
     """, unsafe_allow_html=True)
-    st.caption(f"System Date: {datetime.date.today()} | Database Status: Connected | 🔐 Session Status: Administrative Mode Enabled")
+    st.caption(f"Системная дата : {datetime.date.today().strftime('%d.%m.%Y')}    |    Связь с БД: Установлено | 🔐 Статус сессии: Админ в сети")
 
 else:
     # Guest Mode: The Title is still blue, but the gear icon drops down to flat muted gray
@@ -146,64 +111,45 @@ else:
             <svg class="icon-guest" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
                 <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
             </svg>
-            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">FLEET OPERATIONS CENTER</h1>
+            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">АЙТИ НАРЯДКА</h1>
         </div>
     """, unsafe_allow_html=True)
-    st.caption(f"System Date: {datetime.date.today()} | Database Status: Connected")
+    st.caption(f"Системная дата : {datetime.date.today().strftime('%d.%m.%Y')}   |   Связь с БД: Установлено")
 
 
 # Permanent layout tabs structure
-tab_titles = ["Dashboard", "Equipment", "Mechanics", "Logs", "Notes", "Spareparts", "Tools"]
-tab_ctrl, tab_eq, tab_mech, tab_logs, tab_notes, tab_spare, tab_tools = st.tabs(tab_titles)
+tab_titles = ["ТЕХНИКА", "МЕХАНИКИ", "ОТЧЕТЫ", "ДОКУМЕНТЫ", "ЗАПЧАСТИ", "ИНСТРУМЕНТЫ", "НАСТРОЙКИ"]
+tab_equipment, tab_mech, tab_logs, tab_notes, tab_spare, tab_tools, tab_ctrl = st.tabs(tab_titles)
 
 
-# ==========================================
-# TAB 0: DASHBOARD / ADMIN CONTROL
-# ==========================================
-with tab_ctrl:
-    dash_col1, dash_col2, dash_col3 = st.columns([3.5, 4.7, 1.8])
-    
-    with dash_col1:
-        st.subheader("Operations Command Deck")
-        
-    with dash_col3:
-        st.write("") 
-        if st.session_state.role == "admin":
-            if st.button("Log Out", type="primary", use_container_width=True):
-                st.session_state.role = "guest"
-                st.rerun()
-        else:
-            password = st.text_input(
-                "admin", 
-                type="password", 
-                placeholder="admin ",
-                label_visibility="collapsed"
-            )
-            if password:
-                if password.strip() == st.secrets["credentials"]["admin_password"]:
-                    st.session_state.role = "admin"
-                    st.rerun()
-                else:
-                    st.error("Invalid passkey")
 
-    st.markdown("### Daily System Overview")
-    st.write("Welcome to the main station log panel. Use the tab options above to route across asset divisions.")
 
 
 # ==========================================
-# TAB 1: EQUIPMENT REGISTRY
+# TAB 0: ТЕХНИКА
 # ==========================================
-with tab_eq:
-    st.subheader("Equipment Registry")
+with tab_equipment:
+    russian_machinery_config = {
+        "id": None, # Completely hides the internal primary key ID from the display screen
+        "board_number": st.column_config.TextColumn("Бортовой номер"),
+        "tech_type": st.column_config.TextColumn("Тип техники"),
+        "model": st.column_config.TextColumn("Модель техники"),
+        "serial_number": st.column_config.TextColumn("Серийный номер (VIN)"),        
+        "prod_year": st.column_config.NumberColumn("Год производства", format="%d"),
+        "engine_model": st.column_config.TextColumn("Модель двигателя"),
+        "engine_number": st.column_config.TextColumn("Номер двигателя"),
+        "linkone_code": st.column_config.TextColumn("Код LinkOne")
+    }
+
+    st.subheader("Список техники")
     
     # Dynamic view: Admin can alter inventory parameters directly
     if st.session_state.role == "admin":
-        st.info("Write-access mode enabled for equipment entries.")
         with st.container(border=True):
             st.markdown("**Add Heavy Machine Unit to Registry**")
             c1, c2, c3 = st.columns(3)
             with c1: eq_name = st.text_input("Machine Model Code")
-            with c2: eq_hours = st.number_input("Starting Motohours", min_value=0.0, step=1.0)
+            with c2: eq_hours = st.number_input("Starting Motohours", min_value=0, step=1)
             with c3: eq_loc = st.selectbox("Site Assignment Location", ["North Quarry", "South Garage", "Main Yard"])
             
             if st.button("Register Hardware", type="primary"):
@@ -223,7 +169,7 @@ with tab_eq:
     conn = sqlite3.connect(DB_FILE)
     df_eq = pd.read_sql_query("SELECT id AS 'ID', name AS 'Unit Name', status AS 'Status', motohours AS 'Current Motohours', location AS 'Assignment' FROM equipment", conn)
     conn.close()
-    st.dataframe(df_eq, use_container_width=True, hide_index=True)
+    st.dataframe(df_eq, width="stretch", hide_index=True)
 
 
 # ==========================================
@@ -248,7 +194,7 @@ with tab_logs:
         with st.form("hours_form", clear_on_submit=True):
             st.markdown("**Update Running Metrics**")
             target_unit = st.selectbox("Target Equipment Profile", machine_names)
-            added_runtime = st.number_input("Add Shift Motohours Run Today", min_value=0.1, max_value=24.0, step=0.5)
+            added_runtime = st.number_input("Add Shift Motohours Run Today", min_value=0, max_value=24, step=1)
             
             if st.form_submit_button("Commit Runtime Logs"):
                 run_query("UPDATE equipment SET motohours = motohours + ? WHERE name = ?", (added_runtime, target_unit))
@@ -294,3 +240,35 @@ with tab_notes:
 # ==========================================
 with tab_spare:
     st.subheader("Spare Parts Database")
+
+
+
+# ==========================================
+# TAB 0: DASHBOARD / ADMIN CONTROL
+# ==========================================
+with tab_ctrl:
+    dash_col1, dash_col2, dash_col3 = st.columns([3.5, 4.7, 1.8])
+    
+    with dash_col1:
+        st.subheader("Operations Command Deck")
+        # st.warning(" Роман иди работать!", icon=":material/chat_info:")
+        
+    with dash_col3:
+        st.write("") 
+        if st.session_state.role == "admin":
+            if st.button("Завершить сеанс", type="primary", width="stretch"):
+                st.session_state.role = "guest"
+                st.rerun()
+        else:
+            password = st.text_input(
+                "admin", 
+                type="password", 
+                placeholder="admin ",
+                label_visibility="collapsed"
+            )
+            if password:
+                if password.strip() == st.secrets["credentials"]["admin_password"]:
+                    st.session_state.role = "admin"
+                    st.rerun()
+                else:
+                    st.error("Invalid passkey")

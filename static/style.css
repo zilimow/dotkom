@@ -1,0 +1,55 @@
+
+/* Completely hide the password eye icon */
+[data-testid="stTextInput"] button {
+    display: none !important;
+}
+[data-testid="stTextInputPasswordFieldVisibilityToken"] {
+    display: none !important;
+}
+
+/* Hide top header deploy and hamburger controls completely */
+header[data-testid="stHeader"] {
+    display: none !important;
+}
+
+/* Completely destroy the sidebar frame */
+[data-testid="stSidebar"], [data-testid="stSidebarCollapseButton"] {
+    display: none !important;
+}
+
+/* Center canvas breathing padding */
+.block-container {
+    padding-top: 2rem !important;
+    padding-left: 5rem !important;
+    padding-right: 5rem !important;
+}
+
+/* Change tabs font size for workshop screens */
+[data-testid="stBaseButton-tab"] p {
+    font-size: 30px !important;   
+    font-weight: 600 !important;  
+}
+
+/* APP ICON BASE ANCHORS */
+.header-wrapper {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+}
+
+/* GUEST MODE STYLE (Muted Flat Slate Gray for Gear Only) */
+.icon-guest {
+    fill: #64748b !important;
+}
+
+/* ADMIN MODE STYLE (Komatsu Blue Gear with Active Yellow Glow Animation) */
+.icon-admin {
+    fill: #140A9A !important;
+    filter: drop-shadow(0 0 6px rgba(20, 10, 154, 0.4));
+    animation: pulse-glow 2s infinite alternate;
+}
+
+@keyframes pulse-glow {
+    0% { filter: drop-shadow(0 0 2px rgba(255, 200, 47, 0.3)); }
+    100% { filter: drop-shadow(0 0 8px rgba(255, 200, 47, 0.8)); }
+}

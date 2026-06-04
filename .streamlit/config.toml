@@ -1,0 +1,14 @@
+[theme]
+# The primary accent color for active tab underlines, focus boxes, and buttons
+primaryColor = "#140A9A"
+
+# The background color for your main workspace container canvas
+backgroundColor = "#FFFFFF"
+
+# Background panel color applied strictly behind your minimal sidebar
+secondaryBackgroundColor = "#F8F9FA"
+
+# Primary font typography color applied to all system menus and text fields
+textColor = "#1B232A"
+
+font = "sans serif"

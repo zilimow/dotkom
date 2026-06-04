@@ -2,7 +2,7 @@
 import streamlit as st
 from datetime import datetime
 import pandas as pd
-# Импортируем все необходимые функции
+
 from database.db_manager import (
     init_db, add_record, load_data_as_df, update_db_from_df,
     add_machine, load_machinery_registry, update_machinery_registry,

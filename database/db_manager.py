@@ -11,21 +11,7 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 1. Существующая таблица работ
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS work_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL,
-            tech_type TEXT NOT NULL,
-            model TEXT NOT NULL,
-            work_done TEXT NOT NULL,
-            hours REAL DEFAULT 0.0,
-            driver TEXT,
-            status TEXT
-        )
-    """)
-    
-    # 2. НОВАЯ ТАБЛИЦА: Паспорта/Справочник техники
+    # 1. НОВАЯ ТАБЛИЦА: Паспорта/Справочник техники
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS machinery_registry (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +25,22 @@ def init_db():
             linkone_code TEXT
         )
     """)
+    
+    # 2. Существующая таблица работ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS work_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            tech_type TEXT NOT NULL,
+            model TEXT NOT NULL,
+            work_done TEXT NOT NULL,
+            hours REAL DEFAULT 0.0,
+            driver TEXT,
+            status TEXT
+        )
+    """)
+    
+
 
     # Добавьте в init_db():
     cursor.execute("""
