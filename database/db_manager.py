@@ -1,127 +1,63 @@
-# database/db_manager.py
+# db_manager.py
 import sqlite3
-import pandas as pd
+import os
 
-DB_PATH = "machinery_records.db"
-
-def get_connection():
-    return sqlite3.connect(DB_PATH)
+DB_FILE = "fleet.db"
 
 def init_db():
-    conn = get_connection()
+    """Инициализация базы данных и создание необходимых таблиц."""
+    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
-    # 1. НОВАЯ ТАБЛИЦА: Паспорта/Справочник техники
+    # Создаем таблицу ТЕХНИКА (equipment) со всеми полями из вашего эскиза
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS machinery_registry (
+        CREATE TABLE IF NOT EXISTS equipment (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            board_number TEXT NOT NULL,
-            serial_number TEXT,
-            model TEXT NOT NULL,
-            prod_year INTEGER,
-            tech_type TEXT NOT NULL,
-            engine_model TEXT,
-            engine_number TEXT,
-            linkone_code TEXT
+            board TEXT UNIQUE NOT NULL,       -- Бортовой номер (уникальный)
+            type TEXT NOT NULL,               -- Тип (Самосвал, Экскаватор...)
+            model TEXT NOT NULL,              -- Модель (HD785-7)
+            serial TEXT,                      -- Серийный номер (VIN)
+            year INTEGER,                     -- Год производства
+            engine TEXT,                      -- Модель ДВС
+            engine_number TEXT,               -- Номер ДВС
+            code TEXT,                        -- Системный КОД
+            last_hours TEXT,                  -- Последняя дата показаний м/ч
+            hours INTEGER DEFAULT 0,          -- Текущие Моточасы
+            status TEXT DEFAULT 'В работе'    -- Статус (В работе, В ремонте...)
         )
     """)
     
-    # 2. Существующая таблица работ
+    # Создаем таблицу РАБОТЫ (maintenance_logs) для истории ремонтов и ТО
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS work_logs (
+        CREATE TABLE IF NOT EXISTS maintenance_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL,
-            tech_type TEXT NOT NULL,
-            model TEXT NOT NULL,
-            work_done TEXT NOT NULL,
-            hours REAL DEFAULT 0.0,
-            driver TEXT,
-            status TEXT
+            equipment_board TEXT NOT NULL,    -- Ссылка на бортовой номер техники
+            work_type TEXT NOT NULL,          -- ТО, Аварийный ремонт...
+            description TEXT NOT NULL,        -- Что конкретно сделано
+            downtime_hours REAL DEFAULT 0.0,  -- Время простоя в часах
+            created_at TEXT NOT NULL,         -- Дата и время фиксации
+            performed_by TEXT NOT NULL,       -- Кто выполнил (скрытое поле)
+            FOREIGN KEY (equipment_board) REFERENCES equipment (board)
         )
     """)
     
-
-
-    # Добавьте в init_db():
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mechanics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            position TEXT,
-            crew TEXT, 
-            expertise TEXT,
-            phone TEXT,
-            hire_date TEXT, 
-            experience TEXT
-        )
-    """)
     conn.commit()
     conn.close()
 
-# --- ФУНКЦИИ ДЛЯ ТАБЛИЦЫ РАБОТ ---
-def add_record(date, tech_type, model, фцвфв, hours, driver, status):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO work_logs (date, tech_type, model, work_done, hours, driver, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (date, tech_type, model, work_done, hours, driver, status))
-    conn.commit()
-    conn.close()
+def run_query(query, params=()):
+    """Универсальная функция для выполнения команд записи/изменения (INSERT, UPDATE, DELETE)."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor
 
-def load_data_as_df():
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM work_logs", conn)
-    conn.close()
-    return df
-
-def update_db_from_df(df):
-    conn = get_connection()
-    df.to_sql("work_logs", conn, if_exists="replace", index=False)
-    conn.commit()
-    conn.close()
-
-# --- НОВЫЕ ФУНКЦИИ ДЛЯ СПРАВОЧНИКА ТЕХНИКИ ---
-def add_machine(board_number, serial_number, model, prod_year, tech_type, engine_model, engine_number, linkone_code):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO machinery_registry (board_number, serial_number, model, prod_year, tech_type, engine_model, engine_number, linkone_code)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (board_number, serial_number, model, prod_year, tech_type, engine_model, engine_number, linkone_code))
-    conn.commit()
-    conn.close()
-
-def load_machinery_registry():
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM machinery_registry", conn)
-    conn.close()
-    return df
-
-def update_machinery_registry(df):
-    conn = get_connection()
-    df.to_sql("machinery_registry", conn, if_exists="replace", index=False)
-    conn.commit()
-    conn.close()
-
-def add_mechanic(name, position, crew, expertise, phone, hire_date, experience):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO mechanics (name, position, crew, expertise, phone, hire_date, experience)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (name, position, crew, expertise, phone, hire_date, experience))
-    conn.commit()
-    conn.close()
-
-def load_mechanics():
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM mechanics", conn)
-    conn.close()
-    return df
-
-def update_mechanics(df):
-    conn = get_connection()
-    df.to_sql("mechanics", conn, if_exists="replace", index=False)
-    conn.commit()
-    conn.close()
+def get_data(query, params=()):
+    """Универсальная функция для безопасного чтения данных (SELECT)."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        columns = [column[0] for column in cursor.description]
+        data = cursor.fetchall()
+        # Возвращаем список словарей, чтобы легко конвертировать в Pandas DataFrame
+        return [dict(zip(columns, row)) for row in data]

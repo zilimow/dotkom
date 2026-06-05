@@ -53,3 +53,26 @@ header[data-testid="stHeader"] {
     0% { filter: drop-shadow(0 0 2px rgba(255, 200, 47, 0.3)); }
     100% { filter: drop-shadow(0 0 8px rgba(255, 200, 47, 0.8)); }
 }
+
+button[data-baseweb="tab"] p {
+    font-size: 18px !important;      /* Поставил 24px для теста, 150px разорвет экран */
+    font-weight: 400 !important;     /* Жирность шрифта */
+}
+
+/* 2. Изменение размеров, высоты и ширины самих кнопок вкладок */
+button[data-baseweb="tab"] {
+    padding-top: 15px !important;    /* Отступ сверху для увеличения высоты */
+    padding-bottom: 15px !important; /* Отступ снизу */
+    padding-left: 5px !important;   /* Отступ слева для ширины */
+    padding-right: 5px !important;  /* Отступ справа */
+    min-width: 0px !important;     /* Исправлено: добавлена 'p' в px. Делает вкладки одинаковыми */
+}
+
+/* 3. Стиль для активной (выбранной) вкладки */
+button[data-baseweb="tab"][aria-selected="true"] p {
+    color: #140A9A !important;       /* Фирменный цвет Komatsu Blue для активного текста */
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    border-bottom-color: #140A9A !important; /* Цвет линии подчеркивания */
+}

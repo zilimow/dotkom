@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import datetime
 import sqlite3
+from database.db_manager import init_db, run_query, get_data, DB_FILE
 
+# Автоматически создаем таблицы, если файла fleet.db еще нет на диске
+init_db()
 
 # ==========================================
 # WINDOW ENGINE CONFIGURATIONS & CSS
@@ -82,108 +85,238 @@ def run_query(query, params=()):
 init_db()
 
 
-
-# Initialize Session States
+# Инициализация роли по умолчанию (Гость)
 if "role" not in st.session_state:
     st.session_state.role = "guest"
-    
-    
 
-# ==========================================
-# 🚜 MAIN CONTAINER WORKSPACE INTERFACE (PERMANENT BLUE TITLE)
-# ==========================================
-if st.session_state.role == "admin":
-    # Admin is Online: The Title stays blue, the gear icon lights up and animates
-    st.markdown("""
-        <div class="header-wrapper">
-            <svg class="icon-admin" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
-                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-            </svg>
-            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">АЙТИ НАРЯДКА</h1>
-        </div>
-    """, unsafe_allow_html=True)
-    st.caption(f"Системная дата : {datetime.date.today().strftime('%d.%m.%Y')}    |    Связь с БД: Установлено | 🔐 Статус сессии: Админ в сети")
+# Настройка названия программы, иконки и системной информации
+is_admin = st.session_state.role == "admin"
 
+# Подставляем класс: icon-admin (Komatsu Blue + Yellow Glow) или icon-guest (Muted Gray)
+gear_class = "icon-admin" if is_admin else "icon-guest"
+
+# Рендерим HTML-логотип
+st.markdown(f"""
+    <div class="header-wrapper">
+        <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
+            <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+        </svg>
+        <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">IT НАРЯДКА</h1>
+    </div>
+""", unsafe_allow_html=True)
+
+# Информационная строка под логотипом
+current_date = datetime.date.today().strftime('%d.%m.%Y')
+current_time = datetime.datetime.now().strftime("%H:%M")
+if is_admin:
+    st.text("")   
+    st.caption(f"Системная дата : {current_date} {current_time}   |    Связь с БД: Установлено | 🔐 Статус сессии: Админ в сети")
 else:
-    # Guest Mode: The Title is still blue, but the gear icon drops down to flat muted gray
-    st.markdown("""
-        <div class="header-wrapper">
-            <svg class="icon-guest" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
-                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-            </svg>
-            <h1 style="margin:0; padding:0; font-size:30px; font-weight:800; color:#140A9A;">АЙТИ НАРЯДКА</h1>
-        </div>
-    """, unsafe_allow_html=True)
-    st.caption(f"Системная дата : {datetime.date.today().strftime('%d.%m.%Y')}   |   Связь с БД: Установлено")
+    st.text("")    
+    st.caption(f"Системная дата : {current_date} {current_time}   |   Связь с БД: Установлено")
+    
+    
 
-
-# Permanent layout tabs structure
-tab_titles = ["ТЕХНИКА", "МЕХАНИКИ", "ОТЧЕТЫ", "ДОКУМЕНТЫ", "ЗАПЧАСТИ", "ИНСТРУМЕНТЫ", "НАСТРОЙКИ"]
-tab_equipment, tab_mech, tab_logs, tab_notes, tab_spare, tab_tools, tab_ctrl = st.tabs(tab_titles)
+# ГЛАВНЫЕ ВКЛАДКИ
+tab_titles = ["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"]
+tab_equipment, tab_maintenance, tab_tools, tab_docs, tab_settings = st.tabs(tab_titles)
 
 
 
-
-
-# ==========================================
-# TAB 0: ТЕХНИКА
-# ==========================================
+# ВКЛАДКА ТЕХНИКА
 with tab_equipment:
-    russian_machinery_config = {
-        "id": None, # Completely hides the internal primary key ID from the display screen
-        "board_number": st.column_config.TextColumn("Бортовой номер"),
-        "tech_type": st.column_config.TextColumn("Тип техники"),
-        "model": st.column_config.TextColumn("Модель техники"),
-        "serial_number": st.column_config.TextColumn("Серийный номер (VIN)"),        
-        "prod_year": st.column_config.NumberColumn("Год производства", format="%d"),
-        "engine_model": st.column_config.TextColumn("Модель двигателя"),
+    equipment_config = {
+        "id": None,
+        "board": st.column_config.TextColumn("Бортовой номер"),
+        "type": st.column_config.TextColumn("Тип"),
+        "model": st.column_config.TextColumn("Модель"),
+        "serial": st.column_config.TextColumn("Серийный номер (VIN)"),        
+        "year": st.column_config.NumberColumn("Год производства", format="%Y"),
+        "engine": st.column_config.TextColumn("ДВС"),
         "engine_number": st.column_config.TextColumn("Номер двигателя"),
-        "linkone_code": st.column_config.TextColumn("Код LinkOne")
+        "code": st.column_config.TextColumn("Код"),
+        "last_hours": st.column_config.TextColumn("Последняя дата показаний м/ч"),
+        "hours": st.column_config.NumberColumn("Моточасы", format="%d"),
+        "status": st.column_config.TextColumn("Статус")
     }
 
-    st.subheader("Список техники")
-    
-    # Dynamic view: Admin can alter inventory parameters directly
-    if st.session_state.role == "admin":
-        with st.container(border=True):
-            st.markdown("**Add Heavy Machine Unit to Registry**")
-            c1, c2, c3 = st.columns(3)
-            with c1: eq_name = st.text_input("Machine Model Code")
-            with c2: eq_hours = st.number_input("Starting Motohours", min_value=0, step=1)
-            with c3: eq_loc = st.selectbox("Site Assignment Location", ["North Quarry", "South Garage", "Main Yard"])
-            
-            if st.button("Register Hardware", type="primary"):
-                if eq_name:
-                    try:
-                        run_query("INSERT INTO equipment (name, status, motohours, location) VALUES (?, 'Operational', ?, ?)", 
-                                  (eq_name, eq_hours, eq_loc))
-                        st.success(f"Unit {eq_name} appended to operational fleet.")
-                        st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Error: A machine with that name profile already exists.")
+    st.write("Список техники")
+
+    # ==============================================================================
+    # 1. ПАНЕЛЬ АДМИНИСТРАТОРА (ДОБАВЛЕНИЕ) — Только для Admin
+    # ==============================================================================
+    if st.session_state.get("role") == "admin":
+        with st.expander(
+            "Добавить технику", expanded=False
+        ):
+            with st.form("admin_hardware_form", clear_on_submit=True):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    eq_board = st.text_input(
+                        "Бортовой номер *", placeholder="38"
+                    )
+                    eq_type = st.selectbox(
+                        "Тип техники",
+                        [
+                            "Самосвал",
+                            "Экскаватор",
+                            "Бульдозер",
+                            "Грейдер",
+                            "Погрузчик",
+                        ],
+                    )
+                with col2:
+                    eq_model = st.text_input(
+                        "Модель *", placeholder="HD785-7"
+                    )
+                    eq_serial = st.text_input("Серийный номер", placeholder="32816")
+                with col3:
+                    eq_year = st.number_input(
+                        "Год выпуска",
+                        min_value=1980,
+                        max_value=2030,
+                        value=2024,
+                    )
+                    eq_engine = st.text_input(
+                        "Модель ДВС", placeholder="SAA12V140E-3"
+                    )
+                with col4:
+                    eq_engine_num = st.text_input(
+                        "Номер ДВС", placeholder="511502"
+                    )
+                    eq_code = st.text_input("Код", placeholder="0000642C")
+
+                sub_col1, sub_col2 = st.columns(2)
+                with sub_col1:
+                    eq_hours = st.number_input(
+                        "Стартовые моточасы", min_value=0, step=1
+                    )
+                with sub_col2:
+                    eq_status = st.selectbox(
+                        "Текущий статус", ["В работе", "В ремонте", "В резерве"]
+                    )
+
+                submit_btn = st.form_submit_button("Зарегистрировать технику")
+
+                if submit_btn:
+                    if not eq_board or not eq_model:
+                        st.error("Заполните обязательные поля (*)!")
+                    else:
+                        try:
+                            today_str = (
+                                datetime.date.today().strftime("%d.%m.%Y")
+                            )
+                            run_query(
+                                """
+                                INSERT INTO equipment (board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                                (
+                                    board,
+                                    type,
+                                    model,
+                                    serial,
+                                    year,
+                                    engine,
+                                    engine_number,
+                                    code,
+                                    last_hours,
+                                    hours,
+                                    status,
+                                ),
+                            )
+                            st.success("Техника добавлена!")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("Бортовой номер уже существует!")
+
+    # ==============================================================================
+    # 2. ПОЛУЧЕНИЕ ДАННЫХ ИЗ БД (Общее для всех режимов)
+    # ==============================================================================
+    try:
+        raw_data = get_data("SELECT id, board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status FROM equipment")
+        df_eq = pd.DataFrame(raw_data)
+    except Exception as e:
+        df_eq = pd.DataFrame()
+
+    # 🔥 ЗАЩИТА ОТ КРАША: Если DataFrame пустой или база еще не создана,
+    # мы принудительно создаем пустую таблицу с правильными именами колонок
+    if df_eq.empty:
+        df_eq = pd.DataFrame(columns=[
+            "id", "board", "type", "model", "serial", "year", 
+            "engine", "engine_number", "code", "last_hours", "hours", "status"
+        ])
+
+    # ==============================================================================
+    # 3. ОБЩИЕ МЕТРИКИ (Видят ВСЕ пользователи)
+    # ==============================================================================
+    st.markdown("##### Метрика")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    with m_col1:
+        # Теперь этот код никогда не упадет, так как колонка 'status' гарантированно существует
+        active_units = len(df_eq[df_eq["status"] == "В работе"])
+        st.metric(label="Машин в работе", value=str(active_units))
+    with m_col2:
+        st.metric(label="Средняя наработка на отказ", value="480 ч")
+    with m_col3:
+        st.metric(label="Среднее время простоя", value="8 ч")
+
+    # ==============================================================================
+    # 4. ОБЩИЙ ПОИСК / ФИЛЬТРАЦИЯ (Видят ВСЕ пользователи)
+    # ==============================================================================
+    st.markdown("##### Поиск техники")
+    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+
+    with f_col1:
+        filter_board = st.text_input("Бортовой номер", placeholder="Все")
+    with f_col2:
+        filter_type = st.text_input("Тип", placeholder="Все")
+    with f_col3:
+        filter_model = st.text_input("Модель", placeholder="Все")
+    with f_col4:
+        filter_status = st.text_input("Статус", placeholder="Все")
+
+    # Применение фильтров к данным перед выводом на экран
+    df_filtered = df_eq.copy()
+
+    if filter_board:
+        df_filtered = df_filtered[
+            df_filtered["board"].astype(str).str.contains(filter_board)
+        ]
+    if filter_type:
+        df_filtered = df_filtered[
+            df_filtered["type"].str.contains(filter_type, case=False)
+        ]
+    if filter_model:
+        df_filtered = df_filtered[
+            df_filtered["model"].str.contains(filter_model, case=False)
+        ]
+    if filter_status:
+        df_filtered = df_filtered[
+            df_filtered["status"].str.contains(filter_status, case=False)
+        ]
+
+    st.markdown("---")
+
+    # ==============================================================================
+    # 5. ИТОГОВАЯ ТАБЛИЦА (Видят ВСЕ пользователи)
+    # ==============================================================================
+    st.markdown("##### Список техники")
+
+    if not df_filtered.empty:
+        st.dataframe(
+            df_filtered,
+            column_config=equipment_config,
+            hide_index=True,
+            use_container_width=True,
+        )
     else:
-        st.caption("Read-only guest view mode active.")
-        
-    # Shared Asset Tracker Dataframe view
-    import pandas as pd
-    conn = sqlite3.connect(DB_FILE)
-    df_eq = pd.read_sql_query("SELECT id AS 'ID', name AS 'Unit Name', status AS 'Status', motohours AS 'Current Motohours', location AS 'Assignment' FROM equipment", conn)
-    conn.close()
-    st.dataframe(df_eq, width="stretch", hide_index=True)
+        st.info("Техника по указанным критериям фильтрации не найдена.")
 
 
-# ==========================================
-# TAB 2: MECHANICS ASSIGNMENTS
-# ==========================================
-with tab_mech:
-    st.subheader("Mechanics Assignments")
-    st.write("Duty rosters and tech shift allocations go here.")
 
-
-# ==========================================
-# TAB 3: OPERATION LOGS (Motohours Increments)
-# ==========================================
-with tab_logs:
+# ВКЛАДКА РАБОТЫ
+with tab_maintenance:
     st.subheader("Operation Logs")
     
     # Gather live machines to load select boxes
@@ -206,52 +339,17 @@ with tab_logs:
         st.info("Log tracking metrics write-forms are locked. Log in via Dashboard tab to make entries.")
 
 
-# ==========================================
-# TAB 4: SHIFT HANDOVER NOTES (Day / Night Shift Logic)
-# ==========================================
-with tab_notes:
-    st.subheader("Shift Notes & Handover Instructions")
-    
-    if st.session_state.role == "admin":
-        with st.form("note_form", clear_on_submit=True):
-            st.markdown("**Write Shift Handover Entry**")
-            # Addressing daypart day/night logic natively in user forms
-            selected_shift = st.selectbox("Current Daypart Cycle", ["Day", "Night"])
-            handover_text = st.text_area("Write operational notes / instructions here...")
-            
-            if st.form_submit_button("Publish Instruction Logs"):
-                if handover_text.strip():
-                    run_query("INSERT INTO notes (daypart, author, content) VALUES (?, 'Admin Mechanic', ?)", 
-                              (selected_shift, handover_text))
-                    st.success("Log record saved safely to historical system database.")
-                    st.rerun()
-    
-    # Display the historical archive feed globally to everyone
-    st.markdown("---")
-    st.markdown("##### Historical Handover Archive Log Feed")
-    conn = sqlite3.connect(DB_FILE)
-    df_notes = pd.read_sql_query("SELECT timestamp AS 'Logged Time', daypart AS 'Shift Daypart', content AS 'Instruction Entry' FROM notes ORDER BY id DESC", conn)
-    conn.close()
-    st.table(df_notes)
-
-
-# ==========================================
-# TAB 5: SPARE PARTS
-# ==========================================
-with tab_spare:
+# ВКЛАДКА ИНСТРУМЕНТ
+with tab_tools:
     st.subheader("Spare Parts Database")
 
-
-
-# ==========================================
-# TAB 0: DASHBOARD / ADMIN CONTROL
-# ==========================================
-with tab_ctrl:
+# ВКЛАДКА НАСТРОЙКИ
+with tab_settings:
     dash_col1, dash_col2, dash_col3 = st.columns([3.5, 4.7, 1.8])
     
     with dash_col1:
-        st.subheader("Operations Command Deck")
-        # st.warning(" Роман иди работать!", icon=":material/chat_info:")
+        st.write("Настройки приложения")
+
         
     with dash_col3:
         st.write("") 
@@ -260,12 +358,7 @@ with tab_ctrl:
                 st.session_state.role = "guest"
                 st.rerun()
         else:
-            password = st.text_input(
-                "admin", 
-                type="password", 
-                placeholder="admin ",
-                label_visibility="collapsed"
-            )
+            password = st.text_input("admin", type="password", placeholder=" ", label_visibility="collapsed")
             if password:
                 if password.strip() == st.secrets["credentials"]["admin_password"]:
                     st.session_state.role = "admin"
