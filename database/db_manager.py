@@ -1,97 +1,67 @@
-import duckdb
+import sqlite3
+import pandas as pd
 
-DB_FILE = "fleet_duck.db"
+DB_FILE = "fleet.db"
+
+def get_connection():
+    """Создает безопасное подключение к файлу базы данных."""
+    return sqlite3.connect(DB_FILE)
 
 def init_db():
-    """Инициализация базы данных и создание таблиц"""
-    with duckdb.connect(DB_FILE) as conn:
-        conn.execute("CREATE SEQUENCE IF NOT EXISTS eq_id_seq START 1")
-        
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS equpment (
-                id INTEGER PRIMARY KEY DEFAULT nextval('eq_id_seq'),
-                board VARCHAR NOT NULL,
-                type VARCHAR NOT NULL,
-                model VARCHAR NOT NULL,
-                serial VARCHAR NOT NULL,
-                year INTEGER,
-                engine VARCHAR NOT NULL,
-                engine_number VARCHAR NOT NULL,
-                code VARCHAR,
-                last_hours VARCHAR,
-                hours INTEGER,
-                status VARCHAR,
-                UNIQUE (board, model)
-            )
-        """)
+    """Инициализация базы данных и создание необходимых таблиц."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS equipment (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            eq_board TEXT NOT NULL,
+            eq_type TEXT NOT NULL,
+            eq_model TEXT NOT NULL,
+            eq_serial TEXT NOT NULL,
+            eq_year INTEGER,
+            eq_engine TEXT,
+            eq_engine_number TEXT,
+            eq_code TEXT,
+            eq_last_hours TEXT,
+            eq_hours INTEGER,
+            eq_status TEXT,
+            UNIQUE(eq_board, eq_model)
+        )
+    """)   
+    conn.commit()
+    conn.close()
 
-def get_fleet():
-    with duckdb.connect(DB_FILE) as conn:
-        return conn.execute("SELECT * FROM equipment").df()
+# ФУНКЦИИ ДЛЯ РАБОТЫ С ТЕХНИКОЙ
+def load_equipment():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM equipment", conn)
+    conn.close()
+    return df
 
-def add_new_equipment(board, type, model, serial, year, engine, eng_number, code, last_hours, hours, status):
-    """Добавление новой машины"""
-    today_str = datetime.date.today().strftime('%Y-%m-%d')
-    with duckdb.connect(DB_FILE) as conn:
-        conn.execute("""
-            INSERT INTO equipment (board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (board, model) DO UPDATE SET
-                type = EXCLUDED.type,
-                serial = EXCLUDED.serial,
-                year = EXCLUDED.year,
-                engine = EXCLUDED.engine,
-                engine_number = EXCLUDED.engine_number,
-                code = EXCLUDED.code,
-                last_hours = EXCLUDED.last_hours,
-                hours = EXCLUDED.hours,
-                status = EXCLUDED.status
-        """, (board, type, model, serial, year, engine, eng_numиук, code, last_hours, hours, status))
+def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status):
+    """Добавление новой еденицы в базу техники"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR IGNORE INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status))
+    conn.commit()
+    conn.close()
 
-
-
-
-
-
-
-
-
-
+def update_equipment(df):
+    """Updates an existing machinery unit on disk by targeting its precise primary ID database key."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE equipment 
+        SET eq_board = ?, eq_type = ?, eq_model = ?, eq_serial = ?, eq_year = ?, eq_engine = ?, eq_engine_number = ?, eq_code = ?, eq_last_hours = ?, eq_hours = ?, eq_status = ?
+        WHERE id = ?
+    """, (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status, unit_id))
+    conn.commit()
+    conn.close()
 
 
-
-
-
-
-# # db_manager.py
-# import sqlite3
-# import os
-
-# DB_FILE = "fleet.db"
-
-# def init_db():
-#     """Инициализация базы данных и создание необходимых таблиц."""
-#     conn = sqlite3.connect(DB_FILE)
-#     cursor = conn.cursor()
-    
-#     # Создаем таблицу ТЕХНИКА (equipment) со всеми полями из вашего эскиза
-#     cursor.execute("""
-#         CREATE TABLE IF NOT EXISTS equipment (
-#             id INTEGER PRIMARY KEY AUTOINCREMENT,
-#             board TEXT UNIQUE NOT NULL,       -- Бортовой номер (уникальный)
-#             type TEXT NOT NULL,               -- Тип (Самосвал, Экскаватор...)
-#             model TEXT NOT NULL,              -- Модель (HD785-7)
-#             serial TEXT,                      -- Серийный номер (VIN)
-#             year INTEGER,                     -- Год производства
-#             engine TEXT,                      -- Модель ДВС
-#             engine_number TEXT,               -- Номер ДВС
-#             code TEXT,                        -- Системный КОД
-#             last_hours TEXT,                  -- Последняя дата показаний м/ч
-#             hours INTEGER DEFAULT 0,          -- Текущие Моточасы
-#             status TEXT DEFAULT 'В работе'    -- Статус (В работе, В ремонте...)
-#         )
-#     """)
-    
 #     # Создаем таблицу РАБОТЫ (maintenance_logs) для истории ремонтов и ТО
 #     cursor.execute("""
 #         CREATE TABLE IF NOT EXISTS maintenance_logs (
@@ -105,9 +75,7 @@ def add_new_equipment(board, type, model, serial, year, engine, eng_number, code
 #             FOREIGN KEY (equipment_board) REFERENCES equipment (board)
 #         )
 #     """)
-    
-#     conn.commit()
-#     conn.close()
+
 
 # def run_query(query, params=()):
 #     """Универсальная функция для выполнения команд записи/изменения (INSERT, UPDATE, DELETE)."""
@@ -126,3 +94,52 @@ def add_new_equipment(board, type, model, serial, year, engine, eng_number, code
 #         data = cursor.fetchall()
 #         # Возвращаем список словарей, чтобы легко конвертировать в Pandas DataFrame
 #         return [dict(zip(columns, row)) for row in data]
+
+# JOBS
+# def add_record(date, tech_type, model, фцвфв, hours, driver, status):
+#     conn = get_connection()
+#     cursor = conn.cursor()
+#     cursor.execute("""
+#         INSERT INTO work_logs (date, tech_type, model, work_done, hours, driver, status)
+#         VALUES (?, ?, ?, ?, ?, ?, ?)
+#     """, (date, tech_type, model, work_done, hours, driver, status))
+#     conn.commit()
+#     conn.close()
+
+# def load_data_as_df():
+#     conn = get_connection()
+#     df = pd.read_sql_query("SELECT * FROM work_logs", conn)
+#     conn.close()
+#     return df
+
+# def update_db_from_df(df):
+#     conn = get_connection()
+#     df.to_sql("work_logs", conn, if_exists="replace", index=False)
+#     conn.commit()
+#     conn.close()
+
+
+
+
+# MECHANICS
+# def add_mechanic(name, position, crew, expertise, phone, hire_date, experience):
+#     conn = get_connection()
+#     cursor = conn.cursor()
+#     cursor.execute("""
+#         INSERT INTO mechanics (name, position, crew, expertise, phone, hire_date, experience)
+#         VALUES (?, ?, ?, ?, ?, ?, ?)
+#     """, (name, position, crew, expertise, phone, hire_date, experience))
+#     conn.commit()
+#     conn.close()
+
+# def load_mechanics():
+#     conn = get_connection()
+#     df = pd.read_sql_query("SELECT * FROM mechanics", conn)
+#     conn.close()
+#     return df
+
+# def update_mechanics(df):
+#     conn = get_connection()
+#     df.to_sql("mechanics", conn, if_exists="replace", index=False)
+#     conn.commit()
+#     conn.close()

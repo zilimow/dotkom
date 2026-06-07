@@ -5,10 +5,10 @@ import sqlite3
 import database.db_manager as db
 
 # Настройка страницы
-st.set_page_config(page_title="/", layout="wide", page_icon="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+st.set_page_config(page_title="http://localhost:8501", layout="wide", page_icon="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
 
 def load_external_css(file_path):
-    """Reads external styles and safely injects them."""
+    """Функция проверки существования стилей по указанному пути"""
     try:
         with open(file_path, "r", encoding="utf-8") as file_stream:
             css_rules = file_stream.read()
@@ -19,6 +19,7 @@ def load_external_css(file_path):
     except FileNotFoundError:
         st.error(f"CSS File not found at: {file_path}")
 
+# Загрузка стилей внешнего вида приложения
 load_external_css(".streamlit/style.css")
 
 # Загрузка или создание БД
@@ -28,8 +29,29 @@ db.init_db()
 if "role" not in st.session_state:
     st.session_state.role = "guest"
 
-# Подставляем класс: icon-admin (Komatsu Blue + Yellow Glow) или icon-guest (Muted Gray)
+# Задание вида значка приложения для ролей
 gear_class = "icon-admin" if st.session_state.role == "admin" else "icon-guest"
+db_class = "db-icon-base db-online"
+
+current_date = datetime.date.today().strftime('%d.%m.%Y')
+current_time = datetime.datetime.now().strftime("%H:%M")
+
+# Имитация данных о погоде (в будущем можно автоматизировать через API)
+weather_icon = ":material/partly_cloudy_day:"  # Иконка переменной облачности
+weather_temp = "+16°C"
+
+# Информационная строка под логотипом
+divider = "|"
+base_meta = (
+    f"📅 {current_date}"
+    f"&emsp;{divider}&emsp;"
+    f"⏰ {current_time}"
+    f"&emsp;{divider}&emsp;"
+    f"🖥️ Соединение установлено :green[:material/database:]"
+    f"&emsp;{divider}&emsp;"
+    f"{weather_icon} Погода: **{weather_temp}**"
+)
+st.caption(base_meta, unsafe_allow_html=True)
 
 # Рендерим HTML-логотип
 st.markdown(f"""
@@ -37,26 +59,10 @@ st.markdown(f"""
         <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
             <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
         </svg>
-        <h1 style="margin:0; padding:0; font-size:40px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">IT НАРЯДКА</h1>
+        <h1 style="margin:0; padding:0; font-size:40px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">WORKSHOP</h1>
     </div>
 """, unsafe_allow_html=True)
 
-
-current_date = datetime.date.today().strftime('%d.%m.%Y')
-current_time = datetime.datetime.now().strftime("%H:%M")
-current_role = st.session_state.get("role", "guest")
-
-# Информационная строка под логотипом
-
-col_date, col_time, col_role, _ ,_ = st.columns([1.5, 1.5, 3, 6, 6])
-with col_date:
-    st.caption(f"Дата : {current_date}")
-with col_time:
-    st.caption(f"Время : {current_time}")
-with col_role:
-    if "fleet_duck.db":
-        # st.caption(f"Пользователь: {current_role}")
-        st.caption(f"Подключение к БД установлено")
 
     
 
@@ -70,178 +76,219 @@ tab_equipment, tab_maintenance, tab_tools, tab_docs, tab_settings = st.tabs(tab_
 with tab_equipment:
     equipment_config = {
         "id": None,
-        "board": st.column_config.TextColumn("Бортовой номер"),
-        "type": st.column_config.TextColumn("Тип"),
-        "model": st.column_config.TextColumn("Модель"),
-        "serial": st.column_config.TextColumn("Серийный номер (VIN)"),        
-        "year": st.column_config.NumberColumn("Год производства", format="%Y"),
-        "engine": st.column_config.TextColumn("ДВС"),
-        "engine_number": st.column_config.TextColumn("Номер двигателя"),
-        "code": st.column_config.TextColumn("Код"),
-        "last_hours": st.column_config.TextColumn("Последняя дата показаний м/ч"),
-        "hours": st.column_config.NumberColumn("Моточасы", format="%d"),
-        "status": st.column_config.TextColumn("Статус")
+        "eq_board": st.column_config.TextColumn("Бортовой номер"),
+        "eq_type": st.column_config.TextColumn("Тип"),
+        "eq_model": st.column_config.TextColumn("Модель"),
+        "eq_serial": st.column_config.TextColumn("Серийный номер (VIN)"),        
+        "eq_year": st.column_config.NumberColumn("Год производства", format="%Y"),
+        "eq_engine": st.column_config.TextColumn("ДВС"),
+        "eq_engine_number": st.column_config.TextColumn("Номер двигателя"),
+        "eq_code": st.column_config.TextColumn("Код"),
+        "eq_last_hours": st.column_config.TextColumn("Последняя дата показаний м/ч"),
+        "eq_hours": st.column_config.NumberColumn("Моточасы", format="%d"),
+        "eq_status": st.column_config.TextColumn("Статус")
     }
+    
+# 1. Create the Form
+with st.form("add_equipment_form", clear_on_submit=True):
+    st.subheader("Add New Equipment Unit")
+    
+    # Layout fields using columns
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        eq_board = st.text_input("Board Number *")
+        eq_type = st.selectbox("Equipment Type", ["Excavator", "Truck", "Loader", "Bulldozer", "Other"])
+        eq_model = st.text_input("Model *")
+        eq_serial = st.text_input("Serial Number")
+        eq_year = st.number_input("Manufacture Year", min_value=1980, max_value=2030, value=2024)
+        eq_code = st.text_input("Internal Code")
 
-    st.write("Список техники")
+    with col2:
+        eq_engine = st.text_input("Engine Model")
+        eq_engine_number = st.text_input("Engine Number")
+        eq_last_hours = st.text_input("Last Service Hours", value="0")
+        eq_hours = st.number_input("Current Hours", min_value=0, value=0)
+        eq_status = st.selectbox("Status", ["Active", "Maintenance", "Repair", "Archived"])
 
-    # ==============================================================================
-    # 1. ПАНЕЛЬ АДМИНИСТРАТОРА (ДОБАВЛЕНИЕ) — Только для Admin
-    # ==============================================================================
-    if st.session_state.get("role") == "admin":
-        with st.expander(
-            "Добавить технику", expanded=False
-        ):
-            with st.form("admin_hardware_form", clear_on_submit=True):
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    eq_board = st.text_input(
-                        "Бортовой номер *", placeholder="38"
-                    )
-                    eq_type = st.selectbox(
-                        "Тип техники",
-                        [
-                            "Самосвал",
-                            "Экскаватор",
-                            "Бульдозер",
-                            "Грейдер",
-                            "Погрузчик",
-                        ],
-                    )
-                with col2:
-                    eq_model = st.text_input(
-                        "Модель *", placeholder="HD785-7"
-                    )
-                    eq_serial = st.text_input("Серийный номер", placeholder="32816")
-                with col3:
-                    eq_year = st.number_input(
-                        "Год выпуска",
-                        min_value=1980,
-                        max_value=2030,
-                        value=2024,
-                    )
-                    eq_engine = st.text_input(
-                        "Модель ДВС", placeholder="SAA12V140E-3"
-                    )
-                with col4:
-                    eq_engine_num = st.text_input(
-                        "Номер ДВС", placeholder="511502"
-                    )
-                    eq_code = st.text_input("Код", placeholder="0000642C")
+    # Form Submission Button
+    submitted = st.form_submit_button("Save Equipment")
+    
+    if submitted:
+        # Simple Validation for required unique fields (eq_board, eq_model)
+        if not eq_board or not eq_model:
+            st.error("Board Number and Model are required fields!")
+        else:
+            try:
+                db.add_equipment(
+                    eq_board, eq_type, eq_model, eq_serial, int(eq_year),
+                    eq_engine, eq_engine_number, eq_code, eq_last_hours, int(eq_hours), eq_status
+                )
+                st.success(f"Successfully added unit: {eq_board} ({eq_model})")
+            except Exception as e:
+                st.error(f"Error saving to database: {e}")
 
-                sub_col1, sub_col2 = st.columns(2)
-                with sub_col1:
-                    eq_hours = st.number_input(
-                        "Стартовые моточасы", min_value=0, step=1
-                    )
-                with sub_col2:
-                    eq_status = st.selectbox(
-                        "Текущий статус", ["В работе", "В ремонте", "В резерве"]
-                    )
+    # 2. Display existing data below the form
+    st.subheader("Current Fleet Inventory")
+    st.dataframe(db.load_equipment())
 
-                submit_btn = st.form_submit_button("Зарегистрировать технику")
+    # st.write("Список техники")
 
-                if submit_btn:
-                    if not eq_board or not eq_model:
-                        st.error("Заполните обязательные поля (*)!")
-                    else:
-                        try:
-                            today_str = (
-                                datetime.date.today().strftime("%d.%m.%Y")
-                            )
-                            run_query(
-                                """
-                                INSERT INTO equipment (board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                                (
-                                    eq_board,
-                                    eq_type,
-                                    eq_model,
-                                    eq_serial,
-                                    eq_year,
-                                    eq_engine,
-                                    eq_engine_num,
-                                    eq_code,
-                                    today_str,
-                                    eq_hours,
-                                    eq_status,
-                                ),
-                            )
-                            st.success("Техника добавлена!")
-                            st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("Бортовой номер уже существует!")
+    # # ==============================================================================
+    # # 1. ПАНЕЛЬ АДМИНИСТРАТОРА (ДОБАВЛЕНИЕ) — Только для Admin
+    # # ==============================================================================
+    # if st.session_state.get("role") == "admin":
+    #     with st.expander(
+    #         "Добавить технику", expanded=False
+    #     ):
+    #         with st.form("admin_hardware_form", clear_on_submit=True):
+    #             col1, col2, col3, col4 = st.columns(4)
+    #             with col1:
+    #                 eq_board = st.text_input(
+    #                     "Бортовой номер *", placeholder="38"
+    #                 )
+    #                 eq_type = st.selectbox(
+    #                     "Тип техники",
+    #                     [
+    #                         "Самосвал",
+    #                         "Экскаватор",
+    #                         "Бульдозер",
+    #                         "Грейдер",
+    #                         "Погрузчик",
+    #                     ],
+    #                 )
+    #             with col2:
+    #                 eq_model = st.text_input(
+    #                     "Модель *", placeholder="HD785-7"
+    #                 )
+    #                 eq_serial = st.text_input("Серийный номер", placeholder="32816")
+    #             with col3:
+    #                 eq_year = st.number_input(
+    #                     "Год выпуска",
+    #                     min_value=1980,
+    #                     max_value=2030,
+    #                     value=2024,
+    #                 )
+    #                 eq_engine = st.text_input(
+    #                     "Модель ДВС", placeholder="SAA12V140E-3"
+    #                 )
+    #             with col4:
+    #                 eq_engine_num = st.text_input(
+    #                     "Номер ДВС", placeholder="511502"
+    #                 )
+    #                 eq_code = st.text_input("Код", placeholder="0000642C")
 
-    # ==============================================================================
-    # 2. ПОЛУЧЕНИЕ ДАННЫХ ИЗ БД (Общее для всех режимов)
-    # ==============================================================================
-    try:
-        raw_data = get_data("SELECT id, board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status FROM equipment")
-        df_eq = pd.DataFrame(raw_data)
-    except Exception as e:
-        df_eq = pd.DataFrame()
+    #             sub_col1, sub_col2 = st.columns(2)
+    #             with sub_col1:
+    #                 eq_hours = st.number_input(
+    #                     "Стартовые моточасы", min_value=0, step=1
+    #                 )
+    #             with sub_col2:
+    #                 eq_status = st.selectbox(
+    #                     "Текущий статус", ["В работе", "В ремонте", "В резерве"]
+    #                 )
 
-    # 🔥 ЗАЩИТА ОТ КРАША: Если DataFrame пустой или база еще не создана,
-    # мы принудительно создаем пустую таблицу с правильными именами колонок
-    if df_eq.empty:
-        df_eq = pd.DataFrame(columns=[
-            "id", "board", "type", "model", "serial", "year", 
-            "engine", "engine_number", "code", "last_hours", "hours", "status"
-        ])
+    #             submit_btn = st.form_submit_button("Зарегистрировать технику")
+
+    #             if submit_btn:
+    #                 if not eq_board or not eq_model:
+    #                     st.error("Заполните обязательные поля (*)!")
+    #                 else:
+    #                     try:
+    #                         today_str = (
+    #                             datetime.date.today().strftime("%d.%m.%Y")
+    #                         )
+    #                         run_query(
+    #                             """
+    #                             INSERT INTO equipment (board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status) 
+    #                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    #                         """,
+    #                             (
+    #                                 eq_board,
+    #                                 eq_type,
+    #                                 eq_model,
+    #                                 eq_serial,
+    #                                 eq_year,
+    #                                 eq_engine,
+    #                                 eq_engine_num,
+    #                                 eq_code,
+    #                                 today_str,
+    #                                 eq_hours,
+    #                                 eq_status,
+    #                             ),
+    #                         )
+    #                         st.success("Техника добавлена!")
+    #                         st.rerun()
+    #                     except sqlite3.IntegrityError:
+    #                         st.error("Бортовой номер уже существует!")
 
 
-    # ==============================================================================
-    # 4. ОБЩИЙ ПОИСК / ФИЛЬТРАЦИЯ (Видят ВСЕ пользователи)
-    # ==============================================================================
-    st.markdown("##### Поиск техники")
-    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+#     # ==============================================================================
+#     # 2. ПОЛУЧЕНИЕ ДАННЫХ ИЗ БД (Общее для всех режимов)
+#     # ==============================================================================
+# try:
+#     conn = get_connection()
+#     # pandas сам прочитает имена колонок eq_board, eq_model и т.д.
+#     df_eq = pd.read_sql_query("SELECT * FROM equipment", conn)
+#     conn.close()
+# except Exception as e:
+#     # Если таблицы нет, создаем пустую структуру с правильными именами
+#     df_eq = pd.DataFrame(columns=[
+#         "id", "eq_board", "eq_type", "eq_model", "eq_serial", "eq_year", 
+#         "eq_engine", "eq_engine_number", "eq_code", "eq_last_hours", "eq_hours", "eq_status"
+#     ])
 
-    with f_col1:
-        filter_board = st.text_input("Бортовой номер", placeholder="Все")
-    with f_col2:
-        filter_type = st.text_input("Тип", placeholder="Все")
-    with f_col3:
-        filter_model = st.text_input("Модель", placeholder="Все")
-    with f_col4:
-        filter_status = st.text_input("Статус", placeholder="Все")
+#     # ==============================================================================
+#     # 4. ОБЩИЙ ПОИСК / ФИЛЬТРАЦИЯ (Видят ВСЕ пользователи)
+#     # ==============================================================================
+#     st.markdown("##### Поиск техники")
+#     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
 
-    # Применение фильтров к данным перед выводом на экран
-    df_filtered = df_eq.copy()
+#     with f_col1:
+#         filter_board = st.text_input("Бортовой номер", placeholder="Все")
+#     with f_col2:
+#         filter_type = st.text_input("Тип", placeholder="Все")
+#     with f_col3:
+#         filter_model = st.text_input("Модель", placeholder="Все")
+#     with f_col4:
+#         filter_status = st.text_input("Статус", placeholder="Все")
 
-    if filter_board:
-        df_filtered = df_filtered[
-            df_filtered["board"].astype(str).str.contains(filter_board)
-        ]
-    if filter_type:
-        df_filtered = df_filtered[
-            df_filtered["type"].str.contains(filter_type, case=False)
-        ]
-    if filter_model:
-        df_filtered = df_filtered[
-            df_filtered["model"].str.contains(filter_model, case=False)
-        ]
-    if filter_status:
-        df_filtered = df_filtered[
-            df_filtered["status"].str.contains(filter_status, case=False)
-        ]
+#     # Применение фильтров к данным перед выводом на экран
+#     df_filtered = df_eq.copy()
 
-    st.markdown("---")
+#     if filter_board:
+#         df_filtered = df_filtered[
+#             df_filtered["board"].astype(str).str.contains(filter_board)
+#         ]
+#     if filter_type:
+#         df_filtered = df_filtered[
+#             df_filtered["type"].str.contains(filter_type, case=False)
+#         ]
+#     if filter_model:
+#         df_filtered = df_filtered[
+#             df_filtered["model"].str.contains(filter_model, case=False)
+#         ]
+#     if filter_status:
+#         df_filtered = df_filtered[
+#             df_filtered["status"].str.contains(filter_status, case=False)
+#         ]
 
-    # ==============================================================================
-    # 5. ИТОГОВАЯ ТАБЛИЦА (Видят ВСЕ пользователи)
-    # ==============================================================================
-    st.markdown("##### Список техники")
 
-    if not df_filtered.empty:
-        st.dataframe(
-            df_filtered,
-            column_config=equipment_config,
-            hide_index=True,
-            use_container_width=True,
-        )
-    else:
-        st.info("Техника по указанным критериям фильтрации не найдена.")
+
+#     # ==============================================================================
+#     # 5. ИТОГОВАЯ ТАБЛИЦА (Видят ВСЕ пользователи)
+#     # ==============================================================================
+#     st.markdown("##### Список техники")
+
+#     if not df_filtered.empty:
+#         st.dataframe(
+#             df_filtered,
+#             column_config=equipment_config,
+#             hide_index=True,
+#             use_container_width=True,
+#         )
+#     else:
+#         st.info("Техника по указанным критериям фильтрации не найдена.")
 
 
 
@@ -269,9 +316,9 @@ with tab_equipment:
 #         st.info("Log tracking metrics write-forms are locked. Log in via Dashboard tab to make entries.")
 
 
-# ВКЛАДКА ИНСТРУМЕНТ
-with tab_tools:
-    st.subheader("Spare Parts Database")
+# # ВКЛАДКА ИНСТРУМЕНТ
+# with tab_tools:
+#     st.subheader("Spare Parts Database")
 
 # ВКЛАДКА НАСТРОЙКИ
 with tab_settings:

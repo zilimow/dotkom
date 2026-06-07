@@ -1,25 +1,29 @@
 
-/* Completely hide the password eye icon */
+/* Скрывает изображение глаза в окне ввода пароля */
 [data-testid="stTextInput"] button {
     display: none !important;
+
+/* Дополнительная проверка скрытия изображение глаза в окне ввода пароля */
 }
 [data-testid="stTextInputPasswordFieldVisibilityToken"] {
     display: none !important;
 }
 
-/* Hide top header deploy and hamburger controls completely */
+/* Скрывает встроенное меню стримлит в верхнем левом углу экрана */
 header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* Completely destroy the sidebar frame */
+/* Скрывает сайдбар */
 [data-testid="stSidebar"], [data-testid="stSidebarCollapseButton"] {
     display: none !important;
 }
 
-/* Center canvas breathing padding */
+/* ---Изменение названия программы---*/
+
+/* Изменяет растояние названия программы от верхней границы страницы */
 .block-container {
-    padding-top: 2rem !important;
+    padding-top: 1rem !important;
     padding-left: 5rem !important;
     padding-right: 5rem !important;
 }
@@ -30,36 +34,41 @@ header[data-testid="stHeader"] {
     font-weight: 600 !important;  
 }
 
-/* APP ICON BASE ANCHORS */
+/* Изменение привязки значка программы */
 .header-wrapper {
     display: flex !important;
     align-items: center !important;
     gap: 14px !important;
 }
 
-/* GUEST MODE STYLE (Muted Flat Slate Gray for Gear Only) */
+/* Стиль значка приложения для гостя */
 .icon-guest {
     fill: #64748b !important;
 }
 
-/* ADMIN MODE STYLE (Komatsu Blue Gear with Active Yellow Glow Animation) */
+/* Стиль значка приложения для админа */
 .icon-admin {
     fill: #140A9A !important;
     filter: drop-shadow(0 0 6px rgba(20, 10, 154, 0.4));
     animation: pulse-glow 2s infinite alternate;
 }
 
+/* Анимация пульсирующего неонового свечения вокруг контура шестеренки */
 @keyframes pulse-glow {
     0% { filter: drop-shadow(0 0 2px rgba(255, 200, 47, 0.3)); }
     100% { filter: drop-shadow(0 0 8px rgba(255, 200, 47, 0.8)); }
 }
 
+
+/* Изменения стиля вкладок*/
+
+/* Размер шрифта вкладок*/
 button[data-baseweb="tab"] p {
-    font-size: 18px !important;      /* Поставил 24px для теста, 150px разорвет экран */
-    font-weight: 400 !important;     /* Жирность шрифта */
+    font-size: 18px !important;      
+    font-weight: 400 !important;     
 }
 
-/* 2. Изменение размеров, высоты и ширины самих кнопок вкладок */
+/* Изменение размеров, высоты и ширины самих кнопок вкладок */
 button[data-baseweb="tab"] {
     padding-top: 15px !important;    /* Отступ сверху для увеличения высоты */
     padding-bottom: 15px !important; /* Отступ снизу */
@@ -68,11 +77,12 @@ button[data-baseweb="tab"] {
     min-width: 0px !important;     /* Исправлено: добавлена 'p' в px. Делает вкладки одинаковыми */
 }
 
-/* 3. Стиль для активной (выбранной) вкладки */
+/* Стиль для активной (выбранной) вкладки */
 button[data-baseweb="tab"][aria-selected="true"] p {
     color: #140A9A !important;       /* Фирменный цвет Komatsu Blue для активного текста */
 }
 
+/* Цвет линии подчеркивания */
 button[data-baseweb="tab"][aria-selected="true"] {
-    border-bottom-color: #140A9A !important; /* Цвет линии подчеркивания */
+    border-bottom-color: #140A9A !important; 
 }
