@@ -1,9 +1,66 @@
+import database.db_manager as db
 import streamlit as st
 import pandas as pd
 import datetime
 import sqlite3
-import database.db_manager as db
+import time
 
+
+# Определение типов техники
+FLEET_TYPES = [
+    "Гусеничный экскаватор", 
+    "Колесный экскаватор",
+    "Самосвал", 
+    "Фронтальный погрузчик", 
+    "Гусеничный бульдозер", 
+    "Колесный бульдозер",
+    "Автогрейдер",
+    "Шинный погрузчик",
+    "Телескоп",
+    "Вилочный погрузчик"
+]
+
+FLEET_STATUSES = [
+    "В работе",
+    "В ремонте"
+]
+
+def auto_save_equipment():
+    """Тихо сохраняет изменения из таблицы прямо в базу данных SQLite в бэкграунде."""
+    if "equipment_editor" in st.session_state:
+        editor_state = st.session_state["equipment_editor"]
+        
+        # Проверяем, были ли реальные изменения строк
+        if editor_state.get("edited_rows"):
+            current_df = db.load_equipment()
+            
+            for row_idx, updated_columns in editor_state["edited_rows"].items():
+                row_id = current_df.iloc[row_idx]["id"]
+                for col_name, new_value in updated_columns.items():
+                    
+                    # 1. Обработка года производства
+                    if col_name == "eq_year" and new_value:
+                        try:
+                            new_value = pd.to_datetime(new_value).year
+                        except:
+                            new_value = 2026
+                            
+                    # 2. ИСПРАВЛЕНИЕ: Обработка даты моточасов перед записью в SQLite
+                    elif col_name == "eq_last_hours" and new_value:
+                        try:
+                            # Переводим в чистую строковую дату формата ГГГГ-ММ-ДД
+                            new_value = pd.to_datetime(new_value).strftime('%Y-%m-%d')
+                        except:
+                            new_value = None
+                            
+                    current_df.loc[current_df["id"] == row_id, col_name] = new_value
+
+            try:
+                # Физическая запись на диск в файл fleet.db
+                db.update_equipment(current_df)
+            except Exception as e:
+                st.error(f"Ошибка фонового сохранения: {e}")
+                
 # Настройка страницы
 st.set_page_config(page_title="http://localhost:8501", layout="wide", page_icon="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
 
@@ -37,17 +94,17 @@ current_date = datetime.date.today().strftime('%d.%m.%Y')
 current_time = datetime.datetime.now().strftime("%H:%M")
 
 # Имитация данных о погоде (в будущем можно автоматизировать через API)
-weather_icon = ":material/partly_cloudy_day:"  # Иконка переменной облачности
+weather_icon = ":material/sunny:"  # Иконка переменной облачности
 weather_temp = "+16°C"
 
 # Информационная строка под логотипом
 divider = "|"
 base_meta = (
-    f"📅 {current_date}"
+    f":material/calendar_month: {current_date}"
     f"&emsp;{divider}&emsp;"
-    f"⏰ {current_time}"
+    f":material/schedule: {current_time}"
     f"&emsp;{divider}&emsp;"
-    f"🖥️ Соединение установлено :green[:material/database:]"
+    f":material/satellite_alt: Соединение установлено :green[:material/database:]"
     f"&emsp;{divider}&emsp;"
     f"{weather_icon} Погода: **{weather_temp}**"
 )
@@ -63,232 +120,100 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-
-    
+equipment_config = {
+    "id": None, # Скрываем ID от пользователя
+    "eq_board": st.column_config.TextColumn("Бортовой номер"),
+    "eq_type": st.column_config.SelectboxColumn("Тип", options=FLEET_TYPES, required=True),
+    "eq_model": st.column_config.TextColumn("Модель"),
+    "eq_serial": st.column_config.TextColumn("Серийный номер (VIN)"),        
+    "eq_year": st.column_config.DateColumn("Год производства", format="YYYY"),
+    "eq_engine": st.column_config.TextColumn("ДВС"),
+    "eq_engine_number": st.column_config.TextColumn("Номер двигателя"),
+    "eq_code": st.column_config.TextColumn("Код"),
+    "eq_last_hours": st.column_config.DateColumn("Последняя дата показаний м/ч", format="DD.MM.YYYY"),
+    "eq_hours": st.column_config.NumberColumn("Моточасы", format="%d"),
+    "eq_status": st.column_config.SelectboxColumn("Статус", options=FLEET_STATUSES)
+}
 
 # ГЛАВНЫЕ ВКЛАДКИ
 tab_titles = ["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"]
 tab_equipment, tab_maintenance, tab_tools, tab_docs, tab_settings = st.tabs(tab_titles)
 
-
-
 # ВКЛАДКА ТЕХНИКА
 with tab_equipment:
-    equipment_config = {
-        "id": None,
-        "eq_board": st.column_config.TextColumn("Бортовой номер"),
-        "eq_type": st.column_config.TextColumn("Тип"),
-        "eq_model": st.column_config.TextColumn("Модель"),
-        "eq_serial": st.column_config.TextColumn("Серийный номер (VIN)"),        
-        "eq_year": st.column_config.NumberColumn("Год производства", format="%Y"),
-        "eq_engine": st.column_config.TextColumn("ДВС"),
-        "eq_engine_number": st.column_config.TextColumn("Номер двигателя"),
-        "eq_code": st.column_config.TextColumn("Код"),
-        "eq_last_hours": st.column_config.TextColumn("Последняя дата показаний м/ч"),
-        "eq_hours": st.column_config.NumberColumn("Моточасы", format="%d"),
-        "eq_status": st.column_config.TextColumn("Статус")
-    }
     
-# 1. Create the Form
-with st.form("add_equipment_form", clear_on_submit=True):
-    st.subheader("Add New Equipment Unit")
+    # --- БЛОК АДМИНИСТРАТОРА: Форма добавления техники ---
+    if st.session_state.role == "admin":
+        with st.expander("Добавить машину"):
+            with st.form("add_equipment_form", clear_on_submit=True):
+                            
+                col1, col2 = st.columns(2)
+                with col1:
+                    form_eq_board = st.text_input("Бортовой номер *")
+                    form_eq_type = st.selectbox("Тип", FLEET_TYPES)
+                    form_eq_model = st.text_input("Модель *")
+                    form_eq_serial = st.text_input("Серийный номер")
+                    form_eq_year = st.number_input("Год производства", min_value=1980, max_value=2030, value=2026)
+                    form_eq_code = st.text_input("Код")
+
+                with col2:
+                    form_eq_engine = st.text_input("ДВС")
+                    form_eq_engine_number = st.text_input("Номер ДВС")
+                    form_eq_last_hours = st.date_input("Последняя дата показаний м/ч", value=datetime.date.today(), format="DD.MM.YYYY")
+                    form_eq_hours = st.number_input("Моточасы", min_value=0, value=0)
+                    form_eq_status = st.selectbox("Статус", FLEET_STATUSES)
+
+                submitted = st.form_submit_button("Сохранить новую единицу")
+                
+                if submitted:
+                    if not form_eq_board or not form_eq_model:
+                        st.error("Бортовой номер и Модель являются обязательными полями!")
+                    else:
+                        try:
+                            # Конвертируем дату из календаря формы в строку для SQLite
+                            str_last_hours = form_eq_last_hours.strftime('%Y-%m-%d')
+                            
+                            db.add_equipment(
+                                form_eq_board, form_eq_type, form_eq_model, form_eq_serial, int(form_eq_year),
+                                form_eq_engine, form_eq_engine_number, form_eq_code, form_eq_last_hours, int(form_eq_hours), form_eq_status
+                            )
+                            st.toast("Машина успешно добавлена!", icon="✅")
+                            st.rerun() 
+                        except Exception as e:
+                            st.error(f"Error saving to database: {e}")
+
+    # --- ОБЩИЙ БЛОК: Отображение данных ---
+    st.caption("Список техники")
     
-    # Layout fields using columns
-    col1, col2 = st.columns(2)
+    # Загружаем данные ОДИН раз (убран лишний дубликат вызова функции)
+    df_equipment = db.load_equipment()
     
-    with col1:
-        eq_board = st.text_input("Board Number *")
-        eq_type = st.selectbox("Equipment Type", ["Excavator", "Truck", "Loader", "Bulldozer", "Other"])
-        eq_model = st.text_input("Model *")
-        eq_serial = st.text_input("Serial Number")
-        eq_year = st.number_input("Manufacture Year", min_value=1980, max_value=2030, value=2024)
-        eq_code = st.text_input("Internal Code")
+    # Подготавливаем типы данных перед передачей в интерфейс
+    df_equipment['eq_type'] = df_equipment['eq_type'].astype(str).str.strip()
+    df_equipment['eq_year'] = pd.to_datetime(df_equipment['eq_year'].astype(str) + '-01-01', errors='coerce')
+    df_equipment['eq_status'] = df_equipment['eq_status'].astype(str).str.strip()
+    df_equipment['eq_last_hours'] = pd.to_datetime(df_equipment['eq_last_hours'], errors='coerce')
 
-    with col2:
-        eq_engine = st.text_input("Engine Model")
-        eq_engine_number = st.text_input("Engine Number")
-        eq_last_hours = st.text_input("Last Service Hours", value="0")
-        eq_hours = st.number_input("Current Hours", min_value=0, value=0)
-        eq_status = st.selectbox("Status", ["Active", "Maintenance", "Repair", "Archived"])
-
-    # Form Submission Button
-    submitted = st.form_submit_button("Save Equipment")
-    
-    if submitted:
-        # Simple Validation for required unique fields (eq_board, eq_model)
-        if not eq_board or not eq_model:
-            st.error("Board Number and Model are required fields!")
-        else:
-            try:
-                db.add_equipment(
-                    eq_board, eq_type, eq_model, eq_serial, int(eq_year),
-                    eq_engine, eq_engine_number, eq_code, eq_last_hours, int(eq_hours), eq_status
-                )
-                st.success(f"Successfully added unit: {eq_board} ({eq_model})")
-            except Exception as e:
-                st.error(f"Error saving to database: {e}")
-
-    # 2. Display existing data below the form
-    st.subheader("Current Fleet Inventory")
-    st.dataframe(db.load_equipment())
-
-    # st.write("Список техники")
-
-    # # ==============================================================================
-    # # 1. ПАНЕЛЬ АДМИНИСТРАТОРА (ДОБАВЛЕНИЕ) — Только для Admin
-    # # ==============================================================================
-    # if st.session_state.get("role") == "admin":
-    #     with st.expander(
-    #         "Добавить технику", expanded=False
-    #     ):
-    #         with st.form("admin_hardware_form", clear_on_submit=True):
-    #             col1, col2, col3, col4 = st.columns(4)
-    #             with col1:
-    #                 eq_board = st.text_input(
-    #                     "Бортовой номер *", placeholder="38"
-    #                 )
-    #                 eq_type = st.selectbox(
-    #                     "Тип техники",
-    #                     [
-    #                         "Самосвал",
-    #                         "Экскаватор",
-    #                         "Бульдозер",
-    #                         "Грейдер",
-    #                         "Погрузчик",
-    #                     ],
-    #                 )
-    #             with col2:
-    #                 eq_model = st.text_input(
-    #                     "Модель *", placeholder="HD785-7"
-    #                 )
-    #                 eq_serial = st.text_input("Серийный номер", placeholder="32816")
-    #             with col3:
-    #                 eq_year = st.number_input(
-    #                     "Год выпуска",
-    #                     min_value=1980,
-    #                     max_value=2030,
-    #                     value=2024,
-    #                 )
-    #                 eq_engine = st.text_input(
-    #                     "Модель ДВС", placeholder="SAA12V140E-3"
-    #                 )
-    #             with col4:
-    #                 eq_engine_num = st.text_input(
-    #                     "Номер ДВС", placeholder="511502"
-    #                 )
-    #                 eq_code = st.text_input("Код", placeholder="0000642C")
-
-    #             sub_col1, sub_col2 = st.columns(2)
-    #             with sub_col1:
-    #                 eq_hours = st.number_input(
-    #                     "Стартовые моточасы", min_value=0, step=1
-    #                 )
-    #             with sub_col2:
-    #                 eq_status = st.selectbox(
-    #                     "Текущий статус", ["В работе", "В ремонте", "В резерве"]
-    #                 )
-
-    #             submit_btn = st.form_submit_button("Зарегистрировать технику")
-
-    #             if submit_btn:
-    #                 if not eq_board or not eq_model:
-    #                     st.error("Заполните обязательные поля (*)!")
-    #                 else:
-    #                     try:
-    #                         today_str = (
-    #                             datetime.date.today().strftime("%d.%m.%Y")
-    #                         )
-    #                         run_query(
-    #                             """
-    #                             INSERT INTO equipment (board, type, model, serial, year, engine, engine_number, code, last_hours, hours, status) 
-    #                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    #                         """,
-    #                             (
-    #                                 eq_board,
-    #                                 eq_type,
-    #                                 eq_model,
-    #                                 eq_serial,
-    #                                 eq_year,
-    #                                 eq_engine,
-    #                                 eq_engine_num,
-    #                                 eq_code,
-    #                                 today_str,
-    #                                 eq_hours,
-    #                                 eq_status,
-    #                             ),
-    #                         )
-    #                         st.success("Техника добавлена!")
-    #                         st.rerun()
-    #                     except sqlite3.IntegrityError:
-    #                         st.error("Бортовой номер уже существует!")
-
-
-#     # ==============================================================================
-#     # 2. ПОЛУЧЕНИЕ ДАННЫХ ИЗ БД (Общее для всех режимов)
-#     # ==============================================================================
-# try:
-#     conn = get_connection()
-#     # pandas сам прочитает имена колонок eq_board, eq_model и т.д.
-#     df_eq = pd.read_sql_query("SELECT * FROM equipment", conn)
-#     conn.close()
-# except Exception as e:
-#     # Если таблицы нет, создаем пустую структуру с правильными именами
-#     df_eq = pd.DataFrame(columns=[
-#         "id", "eq_board", "eq_type", "eq_model", "eq_serial", "eq_year", 
-#         "eq_engine", "eq_engine_number", "eq_code", "eq_last_hours", "eq_hours", "eq_status"
-#     ])
-
-#     # ==============================================================================
-#     # 4. ОБЩИЙ ПОИСК / ФИЛЬТРАЦИЯ (Видят ВСЕ пользователи)
-#     # ==============================================================================
-#     st.markdown("##### Поиск техники")
-#     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-
-#     with f_col1:
-#         filter_board = st.text_input("Бортовой номер", placeholder="Все")
-#     with f_col2:
-#         filter_type = st.text_input("Тип", placeholder="Все")
-#     with f_col3:
-#         filter_model = st.text_input("Модель", placeholder="Все")
-#     with f_col4:
-#         filter_status = st.text_input("Статус", placeholder="Все")
-
-#     # Применение фильтров к данным перед выводом на экран
-#     df_filtered = df_eq.copy()
-
-#     if filter_board:
-#         df_filtered = df_filtered[
-#             df_filtered["board"].astype(str).str.contains(filter_board)
-#         ]
-#     if filter_type:
-#         df_filtered = df_filtered[
-#             df_filtered["type"].str.contains(filter_type, case=False)
-#         ]
-#     if filter_model:
-#         df_filtered = df_filtered[
-#             df_filtered["model"].str.contains(filter_model, case=False)
-#         ]
-#     if filter_status:
-#         df_filtered = df_filtered[
-#             df_filtered["status"].str.contains(filter_status, case=False)
-#         ]
-
-
-
-#     # ==============================================================================
-#     # 5. ИТОГОВАЯ ТАБЛИЦА (Видят ВСЕ пользователи)
-#     # ==============================================================================
-#     st.markdown("##### Список техники")
-
-#     if not df_filtered.empty:
-#         st.dataframe(
-#             df_filtered,
-#             column_config=equipment_config,
-#             hide_index=True,
-#             use_container_width=True,
-#         )
-#     else:
-#         st.info("Техника по указанным критериям фильтрации не найдена.")
+    if st.session_state.role == "admin":
+        # Убран старый блок с кнопкой ручного сохранения и баннером успеха.
+        # Теперь таблица полностью автономна. Автосохранение срабатывает на лету.
+        st.data_editor(
+            df_equipment, 
+            column_config=equipment_config, 
+            use_container_width=True,
+            hide_index=True,
+            on_change=auto_save_equipment,
+            key="equipment_editor"
+        )
+                
+    else:
+        # Гость видит обычную таблицу ТОЛЬКО ДЛЯ ЧТЕНИЯ
+        st.dataframe(
+            df_equipment, 
+            column_config=equipment_config, 
+            use_container_width=True,
+            hide_index=True
+        )
 
 
 

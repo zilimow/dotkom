@@ -39,7 +39,7 @@ def load_equipment():
     return df
 
 def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status):
-    """Добавление новой еденицы в базу техники"""
+    """Добавление новой единицы в базу техники"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -50,16 +50,46 @@ def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq
     conn.close()
 
 def update_equipment(df):
-    """Updates an existing machinery unit on disk by targeting its precise primary ID database key."""
+    """Обновляет записи в базе данных на основе переданного DataFrame."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    
+    # Подготавливаем запрос для массового обновления
+    query = """
         UPDATE equipment 
-        SET eq_board = ?, eq_type = ?, eq_model = ?, eq_serial = ?, eq_year = ?, eq_engine = ?, eq_engine_number = ?, eq_code = ?, eq_last_hours = ?, eq_hours = ?, eq_status = ?
+        SET eq_board = ?, eq_type = ?, eq_model = ?, eq_serial = ?, eq_year = ?, 
+            eq_engine = ?, eq_engine_number = ?, eq_code = ?, eq_last_hours = ?, 
+            eq_hours = ?, eq_status = ?
         WHERE id = ?
-    """, (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status, unit_id))
+    """
+    
+    # Собираем данные из DataFrame в нужном порядке колонок
+    # Порядок: сначала новые значения полей, в самом конце — id для условия WHERE
+    data_to_update = df[[
+        'eq_board', 'eq_type', 'eq_model', 'eq_serial', 'eq_year', 
+        'eq_engine', 'eq_engine_number', 'eq_code', 'eq_last_hours', 
+        'eq_hours', 'eq_status', 'id'
+    ]].values.tolist()
+    
+    # Исполняем массовое обновление через executemany (это быстрее, чем цикл в Python)
+    cursor.executemany(query, data_to_update)
+    
     conn.commit()
     conn.close()
+    
+def get_unique_types():
+    """Возвращает список всех уникальных типов техники, сохраненных в БД."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT eq_type FROM equipment WHERE eq_type IS NOT NULL AND eq_type != ''")
+    # Fetch all, unpack tuples, and convert to a plain list
+    types = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    
+    # Fallback to defaults if the database is brand new and empty
+    if not types:
+        types = ["Excavator", "Truck", "Loader", "Bulldozer", "Other"]
+    return types
 
 
 #     # Создаем таблицу РАБОТЫ (maintenance_logs) для истории ремонтов и ТО
