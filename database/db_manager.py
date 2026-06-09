@@ -31,8 +31,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-# ФУНКЦИИ ДЛЯ РАБОТЫ С ТЕХНИКОЙ
 def load_equipment():
+    """Загружает всю технику из БД."""
     conn = get_connection()
     df = pd.read_sql_query("SELECT * FROM equipment", conn)
     conn.close()
@@ -50,11 +50,42 @@ def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq
     conn.close()
 
 def update_equipment(df):
-    """Обновляет записи в базе данных на основе переданного DataFrame."""
+    """Обновляет записи в базе данных на основе переданного DataFrame с автоматическим приведением типов."""
+    if df.empty:
+        return
+
+    # Создаем копию для безопасной очистки
+    df_clean = df.copy()
+
+    # 1. Приведение даты 'eq_last_hours' к строковому формату SQLite (YYYY-MM-DD)
+    if 'eq_last_hours' in df_clean.columns:
+        # errors='coerce' превратит сломанные даты в NaT
+        datetime_last_hours = pd.to_datetime(df_clean['eq_last_hours'], errors='coerce')
+        # Если дата валидна — делаем строку YYYY-MM-DD, иначе записываем None (NULL в БД)
+        df_clean['eq_last_hours'] = datetime_last_hours.dt.strftime('%Y-%m-%d').where(datetime_last_hours.notnull(), None)
+
+    # 2. Безопасное извлечение числового года
+    if 'eq_year' in df_clean.columns:
+        # Конвертируем в datetime, поддерживая и строки, и уже готовые Timestamp
+        datetime_year = pd.to_datetime(df_clean['eq_year'], errors='coerce')
+        # Извлекаем чистый целочисленный год. Если пустой — ставим дефолт 2026
+        df_clean['eq_year'] = datetime_year.dt.year.fillna(2026).astype(int)
+
+    # 3. Гарантированное приведение ID к int
+    if 'id' in df_clean.columns:
+        df_clean['id'] = df_clean['id'].astype(int)
+
+    # Приведение строковых колонок к чистому виду (удаление случайных пробелов)
+    for col in ['eq_board', 'eq_type', 'eq_model', 'eq_status']:
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].astype(str).str.strip()
+
+    # Заменяем все NaN/NaT значения на чистый Python None для SQLite
+    df_clean = df_clean.where(pd.notnull(df_clean), None)
+
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Подготавливаем запрос для массового обновления
     query = """
         UPDATE equipment 
         SET eq_board = ?, eq_type = ?, eq_model = ?, eq_serial = ?, eq_year = ?, 
@@ -63,17 +94,13 @@ def update_equipment(df):
         WHERE id = ?
     """
     
-    # Собираем данные из DataFrame в нужном порядке колонок
-    # Порядок: сначала новые значения полей, в самом конце — id для условия WHERE
-    data_to_update = df[[
+    data_to_update = df_clean[[
         'eq_board', 'eq_type', 'eq_model', 'eq_serial', 'eq_year', 
         'eq_engine', 'eq_engine_number', 'eq_code', 'eq_last_hours', 
         'eq_hours', 'eq_status', 'id'
     ]].values.tolist()
     
-    # Исполняем массовое обновление через executemany (это быстрее, чем цикл в Python)
     cursor.executemany(query, data_to_update)
-    
     conn.commit()
     conn.close()
     
@@ -82,14 +109,50 @@ def get_unique_types():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT DISTINCT eq_type FROM equipment WHERE eq_type IS NOT NULL AND eq_type != ''")
-    # Fetch all, unpack tuples, and convert to a plain list
     types = [row[0] for row in cursor.fetchall()]
     conn.close()
     
-    # Fallback to defaults if the database is brand new and empty
     if not types:
         types = ["Excavator", "Truck", "Loader", "Bulldozer", "Other"]
     return types
+
+
+def import_equipment_dataframe(df_excel):
+    """Принимает очищенный DataFrame из Excel и массово синхронизирует записи в БД без дубликатов."""
+    if df_excel.empty:
+        return 0
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # We use a multi-step UPSERT pattern to ensure absolute alignment on unique keys
+    query = """
+        INSERT INTO equipment (
+            eq_board, eq_type, eq_model, eq_serial, eq_year, 
+            eq_engine, eq_engine_number, eq_code, eq_last_hours, eq_hours, eq_status
+        ) VALUES (TRIM(?), ?, TRIM(?), ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(eq_board, eq_model) DO UPDATE SET
+            eq_type = excluded.eq_type,
+            eq_serial = excluded.eq_serial,
+            eq_year = excluded.eq_year,
+            eq_engine = excluded.eq_engine,
+            eq_engine_number = excluded.eq_engine_number,
+            eq_code = excluded.eq_code
+    """
+    
+    data_to_insert = df_excel[[
+        'eq_board', 'eq_type', 'eq_model', 'eq_serial', 'eq_year', 
+        'eq_engine', 'eq_engine_number', 'eq_code', 'eq_last_hours', 
+        'eq_hours', 'eq_status'
+    ]].values.tolist()
+    
+    cursor.executemany(query, data_to_insert)
+    affected_rows = cursor.rowcount
+    
+    conn.commit()
+    conn.close()
+    return affected_rows
+
 
 
 #     # Создаем таблицу РАБОТЫ (maintenance_logs) для истории ремонтов и ТО
