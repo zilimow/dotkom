@@ -242,6 +242,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "requests" },
     { name = "streamlit" },
 ]
 
@@ -251,6 +252,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=3.0.3" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "streamlit", specifier = ">=1.57.0" },
 ]
 

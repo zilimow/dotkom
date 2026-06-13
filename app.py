@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 # ==================== CONSTANTS ====================
 
 FLEET_TYPES = [
+    "Самосвал",
     "Гусеничный экскаватор", 
-    "Колесный экскаватор",
-    "Самосвал", 
     "Фронтальный погрузчик", 
-    "Гусеничный бульдозер", 
+    "Гусеничный бульдозер",
     "Колесный бульдозер",
     "Автогрейдер",
-    "Шинный погрузчик",
-    "Телескоп",
-    "Вилочный погрузчик"
+    "Вилочный погрузчик",    
+    "Телескоп",    
+    "Колесный экскаватор",
+    "Шинный погрузчик"
 ]
 
 # Column mapping for Excel import
@@ -67,96 +67,48 @@ def load_external_css(file_path: str):
             st.markdown(f"<style>{css_rules}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
         st.warning(f"CSS file not found at: {file_path}")
+        
+def app_header():
+    """Render application header with metadata."""
+    # Задание вида значка приложения для ролей
+    gear_class = "icon-admin" if st.session_state.role == "admin" else "icon-guest"
+    db_class = "db-icon-base db-online"
 
+    current_date = datetime.date.today().strftime('%d.%m.%Y')
+    current_time = datetime.datetime.now().strftime("%H:%M")
 
-# def auto_save_equipment():
-#     """Auto-save edited rows from the equipment editor."""
-#     if "equipment_editor" in st.session_state and st.session_state.role == "admin":
-#         editor_state = st.session_state["equipment_editor"]
-        
-#         # Load current data from database
-#         full_df = db.load_equipment()
-        
-#         if full_df.empty:
-#             return
-        
-#         # Normalize data
-#         full_df['eq_type'] = full_df['eq_type'].astype(str).str.strip()
-        
-#         # Apply current filters to get the exact view
-#         filtered_df = full_df.copy()
-        
-#         if "filter_search" in st.session_state and st.session_state["filter_search"]:
-#             q = st.session_state["filter_search"].strip().lower()
-#             filtered_df = filtered_df[
-#                 filtered_df['eq_board'].astype(str).str.lower().str.contains(q, na=False) | 
-#                 filtered_df['eq_model'].astype(str).str.lower().str.contains(q, na=False)
-#             ]
-        
-#         if "filter_type" in st.session_state and st.session_state["filter_type"] != "Все":
-#             filtered_df = filtered_df[filtered_df['eq_type'] == st.session_state["filter_type"]]
-        
-#         # Handle edited rows
-#         if editor_state.get("edited_rows"):
-#             changed_rows = []
-#             for row_idx, updated_columns in editor_state["edited_rows"].items():
-#                 if row_idx < len(filtered_df):
-#                     real_id = filtered_df.iloc[row_idx]["id"]
-#                     row_to_edit = full_df[full_df["id"] == real_id].copy()
-                    
-#                     for col_name, new_value in updated_columns.items():
-#                         if col_name in DISPLAY_COLUMNS:
-#                             # Special handling for year: convert string to int or None
-#                             if col_name == 'eq_year':
-#                                 if new_value and str(new_value).strip():
-#                                     try:
-#                                         year_value = int(str(new_value).strip())
-#                                         # Only accept reasonable years
-#                                         if 1900 <= year_value <= 2030:
-#                                             row_to_edit[col_name] = year_value
-#                                         else:
-#                                             row_to_edit[col_name] = None
-#                                     except ValueError:
-#                                         row_to_edit[col_name] = None
-#                                 else:
-#                                     row_to_edit[col_name] = None
-#                             else:
-#                                 row_to_edit[col_name] = new_value if new_value and pd.notna(new_value) else None
-                    
-#                     changed_rows.append(row_to_edit)
-            
-#             if changed_rows:
-#                 try:
-#                     conn = db.get_connection()
-#                     cursor = conn.cursor()
-                    
-#                     for row in changed_rows:
-#                         equipment_id = int(row["id"])
-#                         cursor.execute("""
-#                             UPDATE equipment 
-#                             SET eq_board = ?, eq_type = ?, eq_model = ?, eq_serial = ?, 
-#                                 eq_year = ?, eq_engine = ?, eq_engine_number = ?, eq_code = ?,
-#                                 updated_at = CURRENT_TIMESTAMP
-#                             WHERE id = ?
-#                         """, (
-#                             row["eq_board"] if pd.notna(row["eq_board"]) else None,
-#                             row["eq_type"] if pd.notna(row["eq_type"]) else None,
-#                             row["eq_model"] if pd.notna(row["eq_model"]) else None,
-#                             row["eq_serial"] if pd.notna(row["eq_serial"]) else None,
-#                             row["eq_year"] if pd.notna(row["eq_year"]) else None,
-#                             row["eq_engine"] if pd.notna(row["eq_engine"]) else None,
-#                             row["eq_engine_number"] if pd.notna(row["eq_engine_number"]) else None,
-#                             row["eq_code"] if pd.notna(row["eq_code"]) else None,
-#                             equipment_id
-#                         ))
-                    
-#                     conn.commit()
-#                     conn.close()
-#                     logger.info(f"Auto-saved {len(changed_rows)} equipment records")
-                    
-#                 except Exception as e:
-#                     logger.error(f"Auto-save error: {e}")
-                    
+    # Имитация данных о погоде (в будущем можно автоматизировать через API)
+    weather_icon = ":material/sunny:"  # Иконка переменной облачности
+    weather_temp = "+16°C"
+    
+    # Display database statistics
+    stats = db.get_equipment_statistics()
+
+    # Информационная строка под логотипом
+    divider = "|"
+    base_meta = (
+        f":material/calendar_month: {current_date}"
+        f"&emsp;{divider}&emsp;"
+        f":material/schedule: {current_time}"
+        f"&emsp;{divider}&emsp;"
+        f":material/satellite_alt: Соединение установлено :green[:material/database:]"
+        f"&emsp;{divider}&emsp;"
+        f"{weather_icon} Погода: **{weather_temp}**"
+        f"&emsp;{divider}&emsp;"
+        f":yellow[:material/front_loader:] Всего техники: **{stats.get('total', 0)}**"
+    )
+    st.caption(base_meta, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+        <div class="header-wrapper">
+            <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
+                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+            </svg>
+            <h1 style="margin:0; padding:0; font-size:40px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">WORKSHOP</h1>
+        </div>
+    """, unsafe_allow_html=True)
+
+                   
 def create_excel_template():
     """Create empty Excel template on desktop with properly formatted columns."""
     try:
@@ -235,6 +187,7 @@ def process_and_save_excel(file_source):
         logger.error(f"Excel processing failed: {e}")
 
 
+
 def prepare_export_dataframe(df: pd.DataFrame) -> io.BytesIO:
     """
     Prepare DataFrame for Excel export with proper formatting.
@@ -267,95 +220,62 @@ def prepare_export_dataframe(df: pd.DataFrame) -> io.BytesIO:
     return buffer
 
 
-def render_header():
-    """Render application header with metadata."""
-    # Задание вида значка приложения для ролей
-    gear_class = "icon-admin" if st.session_state.role == "admin" else "icon-guest"
-    db_class = "db-icon-base db-online"
-
-    current_date = datetime.date.today().strftime('%d.%m.%Y')
-    current_time = datetime.datetime.now().strftime("%H:%M")
-
-    # Имитация данных о погоде (в будущем можно автоматизировать через API)
-    weather_icon = ":material/sunny:"  # Иконка переменной облачности
-    weather_temp = "+16°C"
-    
-    # Display database statistics
-    stats = db.get_equipment_statistics()
-
-    # Информационная строка под логотипом
-    divider = "|"
-    base_meta = (
-        f":material/calendar_month: {current_date}"
-        f"&emsp;{divider}&emsp;"
-        f":material/schedule: {current_time}"
-        f"&emsp;{divider}&emsp;"
-        f":material/satellite_alt: Соединение установлено :green[:material/database:]"
-        f"&emsp;{divider}&emsp;"
-        f"{weather_icon} Погода: **{weather_temp}**"
-        f"&emsp;{divider}&emsp;"
-        f":yellow[:material/front_loader:] Всего техники: **{stats.get('total', 0)}**"
-    )
-    st.caption(base_meta, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-        <div class="header-wrapper">
-            <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
-                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-            </svg>
-            <h1 style="margin:0; padding:0; font-size:40px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">WORKSHOP</h1>
-        </div>
-    """, unsafe_allow_html=True)
 
 
-def render_equipment_tab():
+
+def equipment_tab():
     """Render equipment management tab."""
     
-    # Load and prepare data
-    df_equipment = db.load_equipment()
+    # 1. You loaded data into a variable named "df_raw"
+    df_raw = db.load_equipment()
     
     # Normalize data types for display
-    if not df_equipment.empty:
-        df_equipment['eq_type'] = df_equipment['eq_type'].astype(str).str.strip()
-        # Keep year as is, don't fill with default
-        if 'eq_year' in df_equipment.columns:
-            df_equipment['eq_year'] = pd.to_numeric(df_equipment['eq_year'], errors='coerce')
-    
+    if not df_raw.empty:
+        df_raw['eq_type'] = df_raw['eq_type'].astype(str).str.strip()
+
     # Prepare export buffer
-    export_buffer = prepare_export_dataframe(df_equipment)
+    export_buffer = prepare_export_dataframe(df_raw)
     
-    # Admin panel - for adding new equipment
+    # 🚨 FIX: Pass "df_raw" here! (Not df_equipment, because it doesn't exist yet)
     if st.session_state.role == "admin":
-        render_admin_panel(export_buffer)
+        admin_panel(export_buffer, df_raw)
     
     # Check if database is empty
-    if df_equipment.empty:
+    if df_raw.empty:
         st.info("База данных пуста. Добавьте технику через панель администратора.")
         return
     
-    # Apply filters
-    render_filters(df_equipment)
+    # Pass raw data into filters -> Catch the filtered result instantly
+    filtered_data = equipment_filters(df_raw)
     
-    # Display equipment table with auto-save
-    render_equipment_table(df_equipment)
+    # Pass that exact filtered data into the table to display it
+    equipment_table(filtered_data)
+
+    
 
 
-def render_admin_panel(export_buffer: io.BytesIO):
+
+# FIX: Change the header line to accept BOTH arguments
+def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
     """Render admin panel with add, import, export functionality."""
-    with st.expander("Добавить технику", expanded=False):
-        tab1, tab2, tab3 = st.tabs(["Ручной ввод", "Импорт из Excel", "Выгрузка в Excel"])
+    with st.expander("Редактировать список техники", expanded=False):
+        tab1, tab2, tab3, tab4 = st.tabs(["Добавить технику", "Изменить данные", "Удалить единицу", "Загрузить или скачать список"])
         
         with tab1:
-            render_manual_add_form()
-        
+            manual_add_form()
         with tab2:
-            render_import_form()
-        
+            manual_update_form(df_equipment)            
         with tab3:
-            render_export_forms(export_buffer)
+            manual_delete_form(df_equipment)
+        with tab4:
+            with st.container(border=True):
+                import_form()
+            with st.container(border=True):
+                export_forms(export_buffer)
 
 
-def render_manual_add_form():
+
+def manual_add_form():
     """Render manual equipment addition form."""
     with st.form("add_equipment_form", clear_on_submit=False):
         col1, col2, col3, col4 = st.columns(4)
@@ -397,7 +317,177 @@ def render_manual_add_form():
                     logger.error(f"Failed to add equipment: {e}")
 
 
-def render_import_form():
+def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded DataFrame directly
+    """Equipment update form using passed DataFrame and dynamic text lookup."""
+    st.subheader("📝 Редактировать существующую технику")
+    
+    if df_equipment.empty:
+        st.info("Нет техники для редактирования.")
+        return
+
+    # 1. Search criteria inputs (does not preload any single record)
+    col_search, col_filter = st.columns(2)
+    with col_search:
+        search_query = st.text_input(
+            "Поиск для редактирования", 
+            placeholder="Введите бортовой номер или модель...", 
+            key="update_lookup_query"
+        ).strip().lower()
+    with col_filter:
+        filter_type = st.selectbox("Тип техники", ["Все"] + FLEET_TYPES, key="update_lookup_type")
+
+    if not search_query and filter_type == "Все":
+        st.info("Введите текст для поиска или выберите тип техники, чтобы загрузить данные.")
+        return
+
+    # 2. Filter the ALREADY loaded DataFrame in memory (No database reads!)
+    filtered = df_equipment.copy()
+    
+    if search_query:
+        mask = (
+            filtered['eq_board'].astype(str).str.lower().str.contains(search_query, na=False) |
+            filtered['eq_model'].astype(str).str.lower().str.contains(search_query, na=False)
+        )
+        filtered = filtered[mask]
+        
+    if filter_type != "Все":
+        filtered = filtered[filtered['eq_type'] == filter_type]
+
+    if filtered.empty:
+        st.error("Техника с такими параметрами не найдена.")
+        return
+
+    # 3. Handle multiple matching records using a selection dropdown
+    filtered['display_label'] = (
+        filtered['eq_board'].astype(str) + " | " + 
+        filtered['eq_type'].astype(str) + " | " + 
+        filtered['eq_model'].astype(str)
+    )
+    
+    selected_label = st.selectbox(
+        f"Найдено совпадений: {len(filtered)}. Выберите нужную машину:", 
+        filtered['display_label'].tolist(),
+        key="update_exact_target"
+    )
+    
+    # Extract precise matching row metrics from memory snapshot
+    current_eq = filtered[filtered['display_label'] == selected_label].iloc[0]
+    equipment_id = int(current_eq['id'])
+    selected_board = str(current_eq['eq_board'])
+    
+    try:
+        type_index = FLEET_TYPES.index(str(current_eq.get('eq_type', '')).strip())
+    except ValueError:
+        type_index = 0
+
+    # 4. Render the input layout grid populated with original data
+    with st.form("update_equipment_form", clear_on_submit=False):
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.text_input("Бортовой номер (ключ)", value=str(current_eq.get('eq_board', '')), disabled=True)
+            eq_model = st.text_input("Модель *", value=str(current_eq.get('eq_model', '')))              
+        with col2:
+            eq_type = st.selectbox("Тип", FLEET_TYPES, index=type_index)
+            eq_serial = st.text_input("Серийный номер", value=get_clean_db_value(current_eq, 'eq_serial'))        
+        with col3:
+            eq_year = st.text_input("Год производства", value=get_clean_db_value(current_eq, 'eq_year'))
+            eq_code = st.text_input("Код", value=get_clean_db_value(current_eq, 'eq_code'))                    
+        with col4:
+            eq_engine = st.text_input("ДВС", value=get_clean_db_value(current_eq, 'eq_engine'))     
+            eq_engine_number = st.text_input("Номер двигателя", value=get_clean_db_value(current_eq, 'eq_engine_number'))
+
+        submitted = st.form_submit_button("Обновить данные", width='stretch')
+        
+        if submitted:
+            if not eq_model:
+                st.error("Поле Модель является обязательным!")
+            else:
+                try:
+                    # Write updates using global backend db module instance
+                    db.update_equipment(
+                        equipment_id=equipment_id, eq_type=eq_type, eq_model=eq_model,
+                        eq_serial=eq_serial, eq_year=eq_year, eq_engine=eq_engine,
+                        eq_engine_number=eq_engine_number, eq_code=eq_code
+                    )
+                    st.success(f"Данные машины {selected_board} успешно обновлены!")
+                    st.rerun() 
+                except Exception as e:
+                    st.error(f"Ошибка при обновлении: {e}")
+
+
+
+
+def manual_delete_form(df_equipment: pd.DataFrame): # Accepts the preloaded DataFrame directly
+    """Equipment deletion form using passed DataFrame and dynamic text lookup."""
+    st.subheader("Удаление техники из базы данных")
+    
+    if df_equipment.empty:
+        st.info("Нет техники для удаления.")
+        return
+
+    # 1. User types query first (does not preload anything automatically)
+    search_query = st.text_input(
+        "Поиск техники для удаления", 
+        placeholder="Введите бортовой номер, модель или тип...", 
+        key="delete_lookup_query"
+    ).strip().lower()
+
+    if not search_query:
+        st.info("Введите текст выше, чтобы найти нужную единицу техники.")
+        return
+
+    # 2. Filter the ALREADY loaded DataFrame in memory (No database calls!)
+    filtered = df_equipment.copy()
+    mask = (
+        filtered['eq_board'].astype(str).str.lower().str.contains(search_query, na=False) |
+        filtered['eq_model'].astype(str).str.lower().str.contains(search_query, na=False) |
+        filtered['eq_type'].astype(str).str.lower().str.contains(search_query, na=False)
+    )
+    filtered = filtered[mask]
+
+    if filtered.empty:
+        st.error("Техника с такими параметрами не найдена.")
+        return
+
+    # 3. Handle multiple search results with a clean display label
+    filtered['display_label'] = (
+        filtered['eq_board'].astype(str) + " | " + 
+        filtered['eq_type'].astype(str) + " | " + 
+        filtered['eq_model'].astype(str)
+    )
+    
+    selected_label = st.selectbox(
+        f"Найдено совпадений: {len(filtered)}. Выберите точную машину:", 
+        filtered['display_label'].tolist(),
+        key="delete_exact_target"
+    )
+    
+    # 4. Extract targeted database primary key tracking id
+    current_eq = filtered[filtered['display_label'] == selected_label].iloc[0]
+    equipment_id = int(current_eq['id'])
+    selected_board = str(current_eq['eq_board'])
+    
+    st.warning(f"⚠️ Вы собираетесь БЕЗВОЗВРАТНО удалить из базы данных: **{selected_label}**")
+
+    # 5. Form wrapper execution loop
+    with st.form("delete_equipment_form", clear_on_submit=True):
+        confirm_delete = st.checkbox("Я подтверждаю, что хочу безвозвратно удалить эту технику")
+        submitted = st.form_submit_button("Удалить технику из системы", type="primary")
+        
+        if submitted:
+            if not confirm_delete:
+                st.error("Пожалуйста, поставьте галочку подтверждения для удаления!")
+            else:
+                try:
+                    # Execute deletion directly using your global db module variable
+                    db.delete_equipment(equipment_id=equipment_id)
+                    st.success(f"Машина {selected_board} успешно удалена из системы!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Ошибка при удалении: {e}")
+
+def import_form():
     """Render Excel import form."""
     uploaded_file = st.file_uploader(
         "Загрузить файл XLSX для обновления/импорта:", 
@@ -407,9 +497,15 @@ def render_import_form():
     if uploaded_file is not None:
         if st.button("Импортировать", type="primary", width='stretch'):
             process_and_save_excel(uploaded_file)
+            
+def get_clean_db_value(row_data, field_key: str) -> str:
+    """Safely extracts a database field value and avoids printing text like 'None' or 'NaN'."""
+    val = row_data.get(field_key)
+    if pd.isna(val) or val is None or str(val).strip().lower() == "none":
+        return ""
+    return str(val)
 
-
-def render_export_forms(export_buffer: io.BytesIO):
+def export_forms(export_buffer: io.BytesIO):
     """Render Excel export forms."""
     st.write("Создать шаблон для заполнения")
     if st.button("Создать шаблон", type="secondary", width='stretch'):
@@ -427,8 +523,7 @@ def render_export_forms(export_buffer: io.BytesIO):
         width='stretch'
     )
 
-
-def render_filters(df_equipment: pd.DataFrame):
+def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
     """Render filter interface for equipment list."""
     st.caption("Поиск техники")
     
@@ -444,7 +539,7 @@ def render_filters(df_equipment: pd.DataFrame):
         type_options = ["Все"] + FLEET_TYPES
         selected_type = st.selectbox("Тип техники", type_options, key="filter_type")
     
-    # Apply filters
+    # Start with a clean copy of the data
     filtered_df = df_equipment.copy()
     
     if search_query:
@@ -459,10 +554,10 @@ def render_filters(df_equipment: pd.DataFrame):
     if selected_type != "Все":
         filtered_df = filtered_df[filtered_df['eq_type'] == selected_type]
     
-    st.session_state.filtered_df = filtered_df.reset_index(drop=True)
+    return filtered_df.reset_index(drop=True)
 
 
-def render_equipment_table(df_equipment: pd.DataFrame):
+def equipment_table(df_to_display: pd.DataFrame):
     """Render equipment data table with auto-save for admin."""
     st.caption("Список техники")
     
@@ -476,53 +571,39 @@ def render_equipment_table(df_equipment: pd.DataFrame):
                 "eq_engine_number": st.column_config.TextColumn("Номер двигателя"),
                 "eq_code": st.column_config.TextColumn("Код"),
             }
+    # Prepare display dataframe (using exactly the columns needed)
+    display_df = df_to_display[DISPLAY_COLUMNS].copy()
     
-    filtered_df = st.session_state.get('filtered_df', df_equipment)
-    
-    if filtered_df.empty:
-        st.info("Техника с такими параметрами не найдена. Попробуйте изменить фильтры.")
-        return
-    
-    # Prepare display dataframe (without ID)
-    display_df = filtered_df[DISPLAY_COLUMNS].copy()
-    
-     
+    st.dataframe(display_df, column_config=column_config, use_container_width=True, hide_index=True)
 
-    st.dataframe(display_df, column_config=column_config, width='stretch', height="content", hide_index=True )
     
 
 
-def render_settings_tab():
+def settings_tab():
     """Render settings and authentication tab."""
-    col1, col2 = st.columns([3.5, 1.8])
+    col1, _, col3 = st.columns([3.5, 6, 1.8])
     
     with col1:
         st.write("Настройки приложения")
-        
+           
+    with col3:
+        if st.session_state.role == "admin":
+            if st.button("Завершить сеанс", type="primary", width='stretch'):
+                st.session_state.role = "guest"
+                st.rerun()
+        else:
+            password = st.text_input( "Пароль", type="password", placeholder="Введите пароль", label_visibility="collapsed")
+            if password:
+                try:
+                    if password.strip() == st.secrets["credentials"]["admin_password"]:
+                        st.session_state.role = "admin"
+                        st.rerun()
+                    else:
+                        st.error("Неверный пароль")
+                except KeyError:
+                    st.error("Ошибка конфигурации. Обратитесь к администратору.")
+                    logger.error("Secrets configuration missing admin_password")
 
-    
-    with col2:
-        render_authentication()
-
-
-def render_authentication():
-    """Render authentication controls."""
-    if st.session_state.role == "admin":
-        if st.button("Завершить сеанс", type="primary", width='stretch'):
-            st.session_state.role = "guest"
-            st.rerun()
-    else:
-        password = st.text_input( "Пароль", type="password", placeholder="Введите пароль", label_visibility="collapsed")
-        if password:
-            try:
-                if password.strip() == st.secrets["credentials"]["admin_password"]:
-                    st.session_state.role = "admin"
-                    st.rerun()
-                else:
-                    st.error("Неверный пароль")
-            except KeyError:
-                st.error("Ошибка конфигурации. Обратитесь к администратору.")
-                logger.error("Secrets configuration missing admin_password")
 
 
 # ==================== MAIN APPLICATION ====================
@@ -550,28 +631,27 @@ def main():
         logger.error(f"Database initialization failed: {e}")
         st.stop()
     
-    # Render header
-    render_header()
+    # Create header
+    app_header()
     
     # Create tabs
-    tab_titles = ["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"]
-    tabs = st.tabs(tab_titles)
-    
-    # Equipment tab
-    with tabs[0]:
-        render_equipment_tab()
-    
-    # Settings tab
-    with tabs[4]:
-        render_settings_tab()
-    
-    # Placeholder for other tabs
-    with tabs[1]:
+    main_tabs = st.tabs(["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"])
+        
+    with main_tabs[0]:
+        equipment_tab()
+        
+    with main_tabs[1]:
         st.info("Раздел в разработке")
-    with tabs[2]:
+        
+    with main_tabs[2]:
         st.info("Раздел в разработке")
-    with tabs[3]:
+        
+    with main_tabs[3]:
         st.info("Раздел в разработке")
+        
+    with main_tabs[4]:
+        settings_tab()
+
 
 
 if __name__ == "__main__":

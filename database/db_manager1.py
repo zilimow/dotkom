@@ -1,0 +1,181 @@
+"""
+Database module for heavy equipment fleet management.
+"""
+
+import sqlite3
+import logging
+from contextlib import contextmanager
+from typing import List, Dict, Any, Optional
+import pandas as pd
+
+DB_FILE = "fleet.db"
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class DatabaseError(Exception):
+    pass
+
+
+def get_connection():
+    """Return database connection."""
+    return sqlite3.connect(DB_FILE)
+
+
+@contextmanager
+def get_connection_context():
+    """Context manager for database connections."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        yield conn
+        conn.commit()
+    except sqlite3.Error as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database error: {e}")
+        raise DatabaseError(f"Database operation failed: {e}") from e
+    finally:
+        if conn:
+            conn.close()
+
+
+def init_db():
+    """Initialize database with all required tables and indexes."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS equipment (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                eq_board TEXT NOT NULL,
+                eq_type TEXT NOT NULL,
+                eq_model TEXT,
+                eq_serial TEXT,
+                eq_year TEXT,
+                eq_engine TEXT,
+                eq_engine_number TEXT,
+                eq_code TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(eq_board, eq_model)
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_equipment_board ON equipment(eq_board)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(eq_type)
+        """)
+        
+        logger.info("Database initialized successfully")
+
+
+def load_equipment():
+    """Load all equipment from database."""
+    with get_connection_context() as conn:
+        df = pd.read_sql_query("SELECT * FROM equipment ORDER BY eq_board", conn)
+        return df
+
+def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code):
+    """Add new equipment to database."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code))
+
+
+def update_equipment(equipment_id, **kwargs):
+    """Update existing equipment."""
+    if not kwargs:
+        return True
+    
+    set_clause = ', '.join([f"{key} = ?" for key in kwargs.keys()])
+    query = f"UPDATE equipment SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        values = list(kwargs.values()) + [equipment_id]
+        cursor.execute(query, values)
+        return cursor.rowcount > 0
+
+
+def delete_equipment(equipment_id):
+    """Delete equipment permanently."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM equipment WHERE id = ?", (equipment_id,))
+        return cursor.rowcount > 0
+
+
+def get_unique_types():
+    """Return list of unique equipment types."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT eq_type FROM equipment WHERE eq_type IS NOT NULL AND eq_type != ''")
+        types = [row[0] for row in cursor.fetchall()]
+        
+        if not types:
+            types = ["Гусеничный экскаватор", "Самосвал", "Фронтальный погрузчик", "Автогрейдер"]
+        return types
+
+
+# def import_equipment_dataframe(df_excel):
+#     """Bulk import/update equipment from DataFrame."""
+#     if df_excel.empty:
+#         return 0
+        
+#     with get_connection_context() as conn:
+#         cursor = conn.cursor()
+        
+#         query = """
+#             INSERT INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code)
+#             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+#             ON CONFLICT(eq_board, eq_model) DO UPDATE SET
+#                 eq_type = excluded.eq_type,
+#                 eq_serial = excluded.eq_serial,
+#                 eq_year = excluded.eq_year,
+#                 eq_engine = excluded.eq_engine,
+#                 eq_engine_number = excluded.eq_engine_number,
+#                 eq_code = excluded.eq_code
+#         """
+        
+#         # Prepare data - keep year as is, don't fill NA
+#         data_to_insert = []
+#         for _, row in df_excel.iterrows():
+#             year_value = row['eq_year'] if pd.notna(row['eq_year']) else None
+#             data_to_insert.append((
+#                 row['eq_board'] if pd.notna(row['eq_board']) else None,
+#                 row['eq_type'] if pd.notna(row['eq_type']) else None,
+#                 row['eq_model'] if pd.notna(row['eq_model']) else None,
+#                 row['eq_serial'] if pd.notna(row['eq_serial']) else None,
+#                 year_value,
+#                 row['eq_engine'] if pd.notna(row['eq_engine']) else None,
+#                 row['eq_engine_number'] if pd.notna(row['eq_engine_number']) else None,
+#                 row['eq_code'] if pd.notna(row['eq_code']) else None
+#             ))
+        
+#         cursor.executemany(query, data_to_insert)
+#         affected_rows = cursor.rowcount
+#         return affected_rows
+
+
+def get_equipment_statistics():
+    """Get statistics about equipment fleet."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM equipment")
+        total = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT eq_type, COUNT(*) FROM equipment GROUP BY eq_type ORDER BY COUNT(*) DESC
+        """)
+        by_type = dict(cursor.fetchall())
+        
+        return {'total': total, 'by_type': by_type}
