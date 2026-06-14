@@ -1,14 +1,14 @@
+from openpyxl.utils import get_column_letter
+import database.db_manager as db
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import datetime
-from pathlib import Path
+import logging
+import time
 import os
 import io
-from openpyxl.utils import get_column_letter
-import logging
 
-# Import the database module
-import database.db_manager as db
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -262,7 +262,7 @@ def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
         tab1, tab2, tab3, tab4 = st.tabs(["Добавить технику", "Изменить данные", "Удалить единицу", "Загрузить или скачать список"])
         
         with tab1:
-            manual_add_form()
+            manual_add_form(df_equipment)
         with tab2:
             manual_update_form(df_equipment)            
         with tab3:
@@ -275,57 +275,165 @@ def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
 
 
 
-def manual_add_form():
-    """Render manual equipment addition form."""
-    with st.form("add_equipment_form", clear_on_submit=False):
+def manual_add_form(df_equipment: pd.DataFrame):
+    """Отрисовка формы ручного добавления техники с адаптивным скрытием уведомлений."""
+    
+    #  CSS СТИЛИ ДЛЯ АНИМАЦИИ ИСЧЕЗНОВЕНИЯ УВЕДОМЛЕНИЙ ПОРЯДОК РЯДОМ С КНОПКОЙ
+    st.markdown(
+        """
+        <style>
+        @keyframes fadeOutNotification {
+            0% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
+        }
+        .self-destruct-success {
+            color: #2e7d32;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.0s forwards;
+        }
+        .self-destruct-error {
+            color: #d32f2f;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.5s forwards;
+        }
+        </style>
+        """, 
+        unsafe_allow_html=True
+    )
+
+    # Инициализация флага успешного сохранения в памяти сессии
+    if "show_fade_success" not in st.session_state:
+        st.session_state["show_fade_success"] = False
+
+    #  ИСПРАВЛЕНИЕ: Используем clear_on_submit=st.session_state["show_fade_success"], 
+    # но управляем им правильно, чтобы не ломать кэш виджетов при повторных кликах после ошибок.
+    with st.form("add_equipment_form", clear_on_submit=st.session_state["show_fade_success"]):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            eq_board = st.text_input("Бортовой номер *")
-            eq_model = st.text_input("Модель *")              
+            eq_board = st.text_input("Бортовой номер *", key="add_eq_board").strip()
+            eq_model = st.text_input("Модель *", key="add_eq_model").strip()
         with col2:
-            eq_type = st.selectbox("Тип", FLEET_TYPES)
-            eq_serial = st.text_input("Серийный номер")
+            eq_type = st.selectbox("Тип", FLEET_TYPES, key="add_eq_type")
+            eq_serial = st.text_input("Серийный номер", key="add_eq_serial").strip()
         with col3:
-            eq_year = st.text_input("Год производства", placeholder="например: 2020")
-            eq_code = st.text_input("Код")                    
+            eq_year = st.text_input("Год производства", placeholder="например: 2020", key="add_eq_year").strip()
+            eq_code = st.text_input("Код", key="add_eq_code").strip()                    
         with col4:
-            eq_engine = st.text_input("ДВС")     
-            eq_engine_number = st.text_input("Номер двигателя")
-
-        submitted = st.form_submit_button("Сохранить", width='stretch')
+            eq_engine = st.text_input("ДВС", key="add_eq_current_engine").strip()     
+            eq_engine_number = st.text_input("Номер двигателя", key="add_eq_engine_num").strip()
+            
+        st.write(" ")
         
+        # Строка разметки для кнопки и статуса в один ряд
+        btn_col, status_col = st.columns([1, 3])
+        
+        with btn_col:
+            submitted = st.form_submit_button("Сохранить", width=250)
+            
+        status_placeholder = status_col.empty()
+        
+        # Если прошлая итерация скрипта завершилась успехом, показываем красивый текст
+        if st.session_state["show_fade_success"]:
+            status_placeholder.markdown('<div class="self-destruct-success">✅ Машина успешно добавлена!</div>', unsafe_allow_html=True)
+            st.session_state["show_fade_success"] = False 
+
         if submitted:
-            if not eq_board or not eq_model:
-                st.error("Бортовой номер и Модель являются обязательными полями!")
-            else:
-                try:
-                    db.add_equipment(
-                        eq_board=eq_board,
-                        eq_type=eq_type,
-                        eq_model=eq_model,
-                        eq_serial=eq_serial,
-                        eq_year=eq_year,
-                        eq_engine=eq_engine,
-                        eq_engine_number=eq_engine_number,
-                        eq_code=eq_code
-                    )
-                    st.success("Машина успешно добавлена!")
-                    st.rerun() 
-                except Exception as e:
-                    st.error(f"Ошибка при сохранении: {e}")
-                    logger.error(f"Failed to add equipment: {e}")
+            # Сразу же очищаем старые сообщения об ошибках
+            status_placeholder.empty()
+            
+            with status_placeholder.container():
+                if not eq_board or not eq_model:
+                    status_placeholder.markdown('<div class="self-destruct-error">❌ Заполните обязательные поля (Бортовой номер и Модель)!</div>', unsafe_allow_html=True)
+                else:
+                    is_duplicate = False
+                    
+                    # Сканируем базу данных на дубликаты
+                    if not df_equipment.empty:
+                        match_board = df_equipment['eq_board'].astype(str).str.lower() == eq_board.lower()
+                        match_model = df_equipment['eq_model'].astype(str).str.lower() == eq_model.lower()
+                        exact_duplicate = match_board & match_model
+                        
+                        if exact_duplicate.any():
+                            matched_row = df_equipment[exact_duplicate].iloc[0]
+                            existing_type = matched_row.get('eq_type', '')
+                            
+                            status_placeholder.markdown(
+                                f'<div class="self-destruct-error">❌ Ошибка: Бортовой номер {eq_board} с моделью {eq_model} уже существует ({existing_type})!</div>', 
+                                unsafe_allow_html=True
+                            )
+                            is_duplicate = True
+
+                    # Если дубликатов нет, выполняем сохранение
+                    if not is_duplicate:
+                        try:
+                            db.add_equipment(
+                                eq_board=eq_board,
+                                eq_type=eq_type,
+                                eq_model=eq_model,
+                                eq_serial=eq_serial,
+                                eq_year=eq_year,
+                                eq_engine=eq_engine,
+                                eq_engine_number=eq_engine_number,
+                                eq_code=eq_code
+                            )
+                            
+                            # Переключаем флаг успеха и взводим автоматическую очистку для следующего рендеринга
+                            st.session_state["show_fade_success"] = True
+                            
+                            #  РЕШЕНИЕ: Вместо ручной перезаписи 'st.session_state', мы просто вызываем st.rerun().
+                            # Так как флаг "show_fade_success" теперь равен True, Streamlit при перезапуске 
+                            # увидит clear_on_submit=True, сам очистит форму и отобразит анимацию успеха.
+                            st.rerun() 
+                            
+                        except Exception as e:
+                            status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка при сохранении: {e}</div>', unsafe_allow_html=True)
 
 
-def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded DataFrame directly
-    """Equipment update form using passed DataFrame and dynamic text lookup."""
+
+
+def manual_update_form(df_equipment: pd.DataFrame):
+    """Форма редактирования техники с динамическим поиском и исчезающими уведомлениями."""
     st.subheader("📝 Редактировать существующую технику")
     
+    # 🎨 Подключаем CSS стили для исчезающих уведомлений рядом с кнопкой
+    st.markdown(
+        """
+        <style>
+        @keyframes fadeOutNotification {
+            0% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
+        }
+        .self-destruct-success {
+            color: #2e7d32;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.0s forwards;
+        }
+        .self-destruct-error {
+            color: #d32f2f;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.5s forwards;
+        }
+        </style>
+        """, 
+        unsafe_allow_html=True
+    )
+
+    # Инициализация флага успешного обновления
+    if "show_update_success" not in st.session_state:
+        st.session_state["show_update_success"] = False
+
     if df_equipment.empty:
         st.info("Нет техники для редактирования.")
         return
 
-    # 1. Search criteria inputs (does not preload any single record)
+    # 1. Панель динамического поиска (не загружает ничего по умолчанию)
     col_search, col_filter = st.columns(2)
     with col_search:
         search_query = st.text_input(
@@ -340,7 +448,7 @@ def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded Data
         st.info("Введите текст для поиска или выберите тип техники, чтобы загрузить данные.")
         return
 
-    # 2. Filter the ALREADY loaded DataFrame in memory (No database reads!)
+    # 2. Фильтрация переданного DataFrame прямо в памяти (без запросов к БД)
     filtered = df_equipment.copy()
     
     if search_query:
@@ -357,7 +465,7 @@ def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded Data
         st.error("Техника с такими параметрами не найдена.")
         return
 
-    # 3. Handle multiple matching records using a selection dropdown
+    # 3. Выпадающий список, если найдено несколько совпадений
     filtered['display_label'] = (
         filtered['eq_board'].astype(str) + " | " + 
         filtered['eq_type'].astype(str) + " | " + 
@@ -370,7 +478,7 @@ def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded Data
         key="update_exact_target"
     )
     
-    # Extract precise matching row metrics from memory snapshot
+    # Извлекаем точную строку выбранной машины
     current_eq = filtered[filtered['display_label'] == selected_label].iloc[0]
     equipment_id = int(current_eq['id'])
     selected_board = str(current_eq['eq_board'])
@@ -380,40 +488,65 @@ def manual_update_form(df_equipment: pd.DataFrame): # Accepts the preloaded Data
     except ValueError:
         type_index = 0
 
-    # 4. Render the input layout grid populated with original data
+    # 4. Форма редактирования (поля заполняются автоматически данными из памяти)
     with st.form("update_equipment_form", clear_on_submit=False):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             st.text_input("Бортовой номер (ключ)", value=str(current_eq.get('eq_board', '')), disabled=True)
-            eq_model = st.text_input("Модель *", value=str(current_eq.get('eq_model', '')))              
+            eq_model = st.text_input("Модель *", value=str(current_eq.get('eq_model', '')), key="update_eq_model").strip()              
         with col2:
-            eq_type = st.selectbox("Тип", FLEET_TYPES, index=type_index)
-            eq_serial = st.text_input("Серийный номер", value=get_clean_db_value(current_eq, 'eq_serial'))        
+            eq_type = st.selectbox("Тип", FLEET_TYPES, index=type_index, key="update_eq_type")
+            eq_serial = st.text_input("Серийный номер", value=get_clean_db_value(current_eq, 'eq_serial'), key="update_eq_serial").strip()
         with col3:
-            eq_year = st.text_input("Год производства", value=get_clean_db_value(current_eq, 'eq_year'))
-            eq_code = st.text_input("Код", value=get_clean_db_value(current_eq, 'eq_code'))                    
+            eq_year = st.text_input("Год производства", value=get_clean_db_value(current_eq, 'eq_year'), key="update_eq_year").strip()
+            eq_code = st.text_input("Код", value=get_clean_db_value(current_eq, 'eq_code'), key="update_eq_code").strip()                    
         with col4:
-            eq_engine = st.text_input("ДВС", value=get_clean_db_value(current_eq, 'eq_engine'))     
-            eq_engine_number = st.text_input("Номер двигателя", value=get_clean_db_value(current_eq, 'eq_engine_number'))
+            eq_engine = st.text_input("ДВС", value=get_clean_db_value(current_eq, 'eq_engine'), key="update_eq_engine").strip()     
+            eq_engine_number = st.text_input("Номер двигателя", value=get_clean_db_value(current_eq, 'eq_engine_number'), key="update_eq_engine_num").strip()
 
-        submitted = st.form_submit_button("Обновить данные", width='stretch')
+        st.write(" ")
         
+        # Строка разметки для кнопки и статуса в один ряд [1, 3]
+        btn_col, status_col = st.columns([1, 3])
+        
+        with btn_col:
+            submitted = st.form_submit_button("Обновить данные", width=250)
+            
+        status_placeholder = status_col.empty()
+        
+        # Если обновление прошло успешно, показываем исчезающий текст
+        if st.session_state["show_update_success"]:
+            status_placeholder.markdown('<div class="self-destruct-success">✅ Данные успешно обновлены!</div>', unsafe_allow_html=True)
+            st.session_state["show_update_success"] = False 
+
         if submitted:
-            if not eq_model:
-                st.error("Поле Модель является обязательным!")
-            else:
-                try:
-                    # Write updates using global backend db module instance
-                    db.update_equipment(
-                        equipment_id=equipment_id, eq_type=eq_type, eq_model=eq_model,
-                        eq_serial=eq_serial, eq_year=eq_year, eq_engine=eq_engine,
-                        eq_engine_number=eq_engine_number, eq_code=eq_code
-                    )
-                    st.success(f"Данные машины {selected_board} успешно обновлены!")
-                    st.rerun() 
-                except Exception as e:
-                    st.error(f"Ошибка при обновлении: {e}")
+            status_placeholder.empty()
+            
+            with status_placeholder.container():
+                if not eq_model:
+                    status_placeholder.markdown('<div class="self-destruct-error">❌ Поле "Модель" является обязательным для заполнения!</div>', unsafe_allow_html=True)
+                else:
+                    # В отличие от добавления, при изменении одной машины дубликаты по eq_board 
+                    # проверять не нужно, так как бортовой номер заблокирован (disabled=True).
+                    try:
+                        db.update_equipment(
+                            equipment_id=equipment_id,
+                            eq_type=eq_type,
+                            eq_model=eq_model,
+                            eq_serial=eq_serial,
+                            eq_year=eq_year,
+                            eq_engine=eq_engine,
+                            eq_engine_number=eq_engine_number,
+                            eq_code=eq_code
+                        )
+                        
+                        # Взводим флаг успеха и отправляем Streamlit на безопасный перезапуск
+                        st.session_state["show_update_success"] = True
+                        st.rerun() 
+                        
+                    except Exception as e:
+                        status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка при обновлении: {e}</div>', unsafe_allow_html=True)
 
 
 
