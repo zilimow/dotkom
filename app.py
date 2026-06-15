@@ -69,22 +69,28 @@ def load_external_css(file_path: str):
         st.warning(f"CSS file not found at: {file_path}")
         
 def app_header():
-    """Render application header with metadata."""
-    # Задание вида значка приложения для ролей
+    """Render application header with metadata, retaining exact CSS styles and matching line to app width."""
+    # Задание вида значка приложения для ролей на основе ваших оригинальных CSS классов
     gear_class = "icon-admin" if st.session_state.role == "admin" else "icon-guest"
-    db_class = "db-icon-base db-online"
-
-    current_date = datetime.date.today().strftime('%d.%m.%Y')
+    
+    months_ru = {
+        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+        5: "мая", 6: "июня", 7: "июля", 8: "августа",
+        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+    }
+    today = datetime.date.today()
+    # Собираем строку: День + Месяц из словаря + Год + г.
+    current_date = f"{today.day} {months_ru[today.month]} {today.year} г."
     current_time = datetime.datetime.now().strftime("%H:%M")
 
-    # Имитация данных о погоде (в будущем можно автоматизировать через API)
-    weather_icon = ":material/sunny:"  # Иконка переменной облачности
+    # Имитация данных о погоде (без изменений)
+    weather_icon = ":material/sunny:"
     weather_temp = "+16°C"
     
     # Display database statistics
     stats = db.get_equipment_statistics()
 
-    # Информационная строка под логотипом
+    # Информационная строка под логотипом (оригинальный st.caption)
     divider = "|"
     base_meta = (
         f":material/calendar_month: {current_date}"
@@ -99,15 +105,41 @@ def app_header():
     )
     st.caption(base_meta, unsafe_allow_html=True)
     
+    # Отрисовка названия с вашей структурой `.header-wrapper` и линией под размер контента
     st.markdown(f"""
-        <div class="header-wrapper">
-            <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
-                <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-            </svg>
-            <h1 style="margin:0; padding:0; font-size:40px; font-weight:800; color:#140A9A; margin-left:10px; display:inline-block; vertical-align:middle;">WORKSHOP</h1>
+        <style>
+        .header-container-underlined {{
+            /* 🚨 ИСПРАВЛЕНИЕ: Убраны все отрицательные отступы. Линия теперь строго под размер приложения */
+            width: 100% !important;
+            box-sizing: border-box;
+            
+            /* Тонкая синяя полоса строго под названием */
+            border-bottom: 3px solid #140A9A; 
+            padding-bottom: 8px;      /* Зазор от слова WORKSHOP до синей линии */
+            margin-bottom: 25px;       /* Расстояние от синей линии вниз до ваших вкладок */
+        }}
+        
+        .header-logo-text {{
+            margin: 0; 
+            padding: 0; 
+            font-size: 38px; 
+            font-weight: 800; 
+            color: #140A9A !important; 
+            line-height: 1;
+        }}
+        </style>
+
+        <!-- Обертка для разделительной линии, которая подстраивается под ширину контента -->
+        <div class="header-container-underlined">
+            <!-- Ваша оригинальная структура связки значка и названия из style.css -->
+            <div class="header-wrapper">
+                <svg class="{gear_class}" width="34" height="34" viewBox="0 0 24 24" xmlns="http://w3.org">
+                    <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+                </svg>
+                <h1 class="header-logo-text">WORKSHOP</h1>
+            </div>
         </div>
     """, unsafe_allow_html=True)
-
                    
 def create_excel_template():
     """Create empty Excel template on desktop with properly formatted columns."""
@@ -223,57 +255,6 @@ def prepare_export_dataframe(df: pd.DataFrame) -> io.BytesIO:
 
 
 
-def equipment_tab():
-    """Render equipment management tab."""
-    
-    # 1. You loaded data into a variable named "df_raw"
-    df_raw = db.load_equipment()
-    
-    # Normalize data types for display
-    if not df_raw.empty:
-        df_raw['eq_type'] = df_raw['eq_type'].astype(str).str.strip()
-
-    # Prepare export buffer
-    export_buffer = prepare_export_dataframe(df_raw)
-    
-    # 🚨 FIX: Pass "df_raw" here! (Not df_equipment, because it doesn't exist yet)
-    if st.session_state.role == "admin":
-        admin_panel(export_buffer, df_raw)
-    
-    # Check if database is empty
-    if df_raw.empty:
-        st.info("База данных пуста. Добавьте технику через панель администратора.")
-        return
-    
-    # Pass raw data into filters -> Catch the filtered result instantly
-    filtered_data = equipment_filters(df_raw)
-    
-    # Pass that exact filtered data into the table to display it
-    equipment_table(filtered_data)
-
-    
-
-
-
-# FIX: Change the header line to accept BOTH arguments
-def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
-    """Render admin panel with add, import, export functionality."""
-    with st.expander("Редактировать список техники", expanded=False):
-        tab1, tab2, tab3, tab4 = st.tabs(["Добавить технику", "Изменить данные", "Удалить единицу", "Загрузить или скачать список"])
-        
-        with tab1:
-            manual_add_form(df_equipment)
-        with tab2:
-            manual_update_form(df_equipment)            
-        with tab3:
-            manual_delete_form(df_equipment)
-        with tab4:
-            with st.container(border=True):
-                import_form()
-            with st.container(border=True):
-                export_forms(export_buffer)
-
-
 
 def manual_add_form(df_equipment: pd.DataFrame):
     """Отрисовка формы ручного добавления техники с адаптивным скрытием уведомлений."""
@@ -338,7 +319,7 @@ def manual_add_form(df_equipment: pd.DataFrame):
         
         # Если прошлая итерация скрипта завершилась успехом, показываем красивый текст
         if st.session_state["show_fade_success"]:
-            status_placeholder.markdown('<div class="self-destruct-success">✅ Машина успешно добавлена!</div>', unsafe_allow_html=True)
+            status_placeholder.markdown('<div class="self-destruct-success">Машина успешно добавлена!</div>', unsafe_allow_html=True)
             st.session_state["show_fade_success"] = False 
 
         if submitted:
@@ -347,7 +328,7 @@ def manual_add_form(df_equipment: pd.DataFrame):
             
             with status_placeholder.container():
                 if not eq_board or not eq_model:
-                    status_placeholder.markdown('<div class="self-destruct-error">❌ Заполните обязательные поля (Бортовой номер и Модель)!</div>', unsafe_allow_html=True)
+                    status_placeholder.markdown('<div class="self-destruct-error">Заполните обязательные поля (Бортовой номер и Модель)!</div>', unsafe_allow_html=True)
                 else:
                     is_duplicate = False
                     
@@ -362,7 +343,7 @@ def manual_add_form(df_equipment: pd.DataFrame):
                             existing_type = matched_row.get('eq_type', '')
                             
                             status_placeholder.markdown(
-                                f'<div class="self-destruct-error">❌ Ошибка: Бортовой номер {eq_board} с моделью {eq_model} уже существует ({existing_type})!</div>', 
+                                f'<div class="self-destruct-error">Ошибка: Бортовой номер {eq_board} с моделью {eq_model} уже существует ({existing_type})!</div>', 
                                 unsafe_allow_html=True
                             )
                             is_duplicate = True
@@ -390,235 +371,318 @@ def manual_add_form(df_equipment: pd.DataFrame):
                             st.rerun() 
                             
                         except Exception as e:
-                            status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка при сохранении: {e}</div>', unsafe_allow_html=True)
+                            status_placeholder.markdown(f'<div class="self-destruct-error"> Ошибка при сохранении: {e}</div>', unsafe_allow_html=True)
 
 
 
 
-def manual_update_form(df_equipment: pd.DataFrame):
-    """Форма редактирования техники с динамическим поиском и исчезающими уведомлениями."""
-    st.subheader("📝 Редактировать существующую технику")
-    
-    # 🎨 Подключаем CSS стили для исчезающих уведомлений рядом с кнопкой
-    st.markdown(
-        """
-        <style>
-        @keyframes fadeOutNotification {
-            0% { opacity: 1; transform: translateY(0); }
-            85% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
-        }
-        .self-destruct-success {
-            color: #2e7d32;
-            font-weight: bold;
-            margin-top: 10px;
-            animation: fadeOutNotification 3.0s forwards;
-        }
-        .self-destruct-error {
-            color: #d32f2f;
-            font-weight: bold;
-            margin-top: 10px;
-            animation: fadeOutNotification 3.5s forwards;
-        }
-        </style>
-        """, 
-        unsafe_allow_html=True
-    )
+def reset_update_modal_filters():
+    """Безопасно очищает кэш поиска внутри окна изменения, не закрывая его."""
+    st.session_state["m_up_q"] = ""
+    st.session_state["m_up_t"] = "Все"
+    st.session_state["m_up_reset_counter"] += 1
 
-    # Инициализация флага успешного обновления
+import streamlit as st
+import pandas as pd
+
+@st.dialog("📝 Редактировать существующую технику")
+def manual_update_modal(df_equipment: pd.DataFrame):
+    """
+    Окно редактирования техники со строгой композитной валидацией дубликатов,
+    выровненной сеткой поиска и защитой от зависания уведомлений.
+    """
+    # Инициализация флага успешного сохранения в памяти сессии
     if "show_update_success" not in st.session_state:
         st.session_state["show_update_success"] = False
 
-    if df_equipment.empty:
-        st.info("Нет техники для редактирования.")
-        return
+    # Инициализация счетчиков и локального кэша поиска для диалога
+    if "m_up_q" not in st.session_state: st.session_state["m_up_q"] = ""
+    if "m_up_t" not in st.session_state: st.session_state["m_up_t"] = "Все"
+    if "m_up_reset_counter" not in st.session_state: st.session_state["m_up_reset_counter"] = 0
 
-    # 1. Панель динамического поиска (не загружает ничего по умолчанию)
-    col_search, col_filter = st.columns(2)
-    with col_search:
-        search_query = st.text_input(
-            "Поиск для редактирования", 
-            placeholder="Введите бортовой номер или модель...", 
-            key="update_lookup_query"
-        ).strip().lower()
-    with col_filter:
-        filter_type = st.selectbox("Тип техники", ["Все"] + FLEET_TYPES, key="update_lookup_type")
-
-    if not search_query and filter_type == "Все":
-        st.info("Введите текст для поиска или выберите тип техники, чтобы загрузить данные.")
-        return
-
-    # 2. Фильтрация переданного DataFrame прямо в памяти (без запросов к БД)
-    filtered = df_equipment.copy()
+    count = st.session_state["m_up_reset_counter"]
     
-    if search_query:
-        mask = (
-            filtered['eq_board'].astype(str).str.lower().str.contains(search_query, na=False) |
-            filtered['eq_model'].astype(str).str.lower().str.contains(search_query, na=False)
+    # =========================================================================
+    # РЯД 1: ПАНЕЛЬ ПОИСКА ТЕХНИКИ (Поиск по Бортовому и Выбор по Типу параллельно)
+    # =========================================================================
+    col_src, col_type = st.columns(2)
+    with col_src:
+        lookup_query = st.text_input(
+            "Бортовой номер техники", 
+            placeholder="Введите бортовой номер...",
+            key=f"m_up_board_input_{count}"
+        ).strip().lower()
+    with col_type:
+        type_options = ["Все"] + FLEET_TYPES
+        selected_type = st.selectbox(
+            "Тип техники", 
+            type_options, 
+            key=f"m_up_type_select_{count}"
         )
+
+    # РЯД 2: КНОПКИ НАЙТИ И СБРОСИТЬ СТРОГО ПОД ПОЛЯМИ ВВОДА (50 / 50)
+    btn_find_col, btn_reset_col = st.columns(2)
+    with btn_find_col:
+        trigger_find = st.button("🔍 Найти", type="primary", use_container_width=True, key="m_up_find_action_btn")
+    with btn_reset_col:
+        has_search = bool(st.session_state["m_up_q"] or st.session_state["m_up_t"] != "Все" or lookup_query or selected_type != "Все")
+        st.button(
+            "🔄 Сбросить", 
+            disabled=not has_search, 
+            use_container_width=True, 
+            key="m_up_reset_action_btn",
+            on_click=reset_update_modal_filters  # Вызывает колбэк без st.rerun(), оставляя окно открытым
+        )
+
+    # Обработка клика по кнопке "Найти"
+    if trigger_find:
+        st.session_state["m_up_q"] = lookup_query
+        st.session_state["m_up_t"] = selected_type
+
+    # Чтение активных подтвержденных параметров поиска
+    active_search = st.session_state["m_up_q"]
+    active_type = st.session_state["m_up_t"]
+
+    if not active_search and active_type == "Все":
+        st.info("Введите бортовой номер или выберите тип техники и нажмите 'Найти'.")
+        return
+
+    # Фильтрация переданного DataFrame прямо в оперативной памяти сервера
+    filtered = df_equipment.copy()
+    if active_search:
+        # Поиск ведется строго по бортовому номеру (eq_board)
+        mask = filtered['eq_board'].astype(str).str.lower().str.contains(active_search, na=False)
         filtered = filtered[mask]
-        
-    if filter_type != "Все":
-        filtered = filtered[filtered['eq_type'] == filter_type]
+    if active_type != "Все":
+        filtered = filtered[filtered['eq_type'] == active_type]
 
     if filtered.empty:
         st.error("Техника с такими параметрами не найдена.")
         return
 
-    # 3. Выпадающий список, если найдено несколько совпадений
-    filtered['display_label'] = (
-        filtered['eq_board'].astype(str) + " | " + 
-        filtered['eq_type'].astype(str) + " | " + 
-        filtered['eq_model'].astype(str)
-    )
+    # Шаг выпадающего списка выбора, если найдено несколько похожих бортовых номеров
+    filtered['display_label'] = filtered['eq_board'].astype(str) + " | " + filtered['eq_type'].astype(str) + " | " + filtered['eq_model'].astype(str)
+    selected_label = st.selectbox("Найдено совпадений. Выберите нужную цель:", filtered['display_label'].tolist(), key=f"modal_update_target_{count}")
     
-    selected_label = st.selectbox(
-        f"Найдено совпадений: {len(filtered)}. Выберите нужную машину:", 
-        filtered['display_label'].tolist(),
-        key="update_exact_target"
-    )
-    
-    # Извлекаем точную строку выбранной машины
-    current_eq = filtered[filtered['display_label'] == selected_label].iloc[0]
-    equipment_id = int(current_eq['id'])
-    selected_board = str(current_eq['eq_board'])
-    
-    try:
-        type_index = FLEET_TYPES.index(str(current_eq.get('eq_type', '')).strip())
-    except ValueError:
-        type_index = 0
-
-    # 4. Форма редактирования (поля заполняются автоматически данными из памяти)
-    with st.form("update_equipment_form", clear_on_submit=False):
-        col1, col2, col3, col4 = st.columns(4)
+    # Извлечение точной записи
+    matched_rows = filtered[filtered['display_label'] == selected_label]
+    if matched_rows.empty:
+        st.error("Ошибка при выборе машины.")
+        return
         
+    current_eq = matched_rows.iloc[0]
+    equipment_id = int(current_eq['id'])
+    
+    try: type_index = FLEET_TYPES.index(str(current_eq.get('eq_type', '')).strip())
+    except ValueError: type_index = 0
+
+    # =========================================================================
+    # РЯД 3: ОСНОВНАЯ КАРТОЧКА РЕДАКТИРОВАНИЯ ПАРАМЕТРОВ МАШИНЫ
+    # =========================================================================
+    with st.form(f"modal_update_execution_form_{equipment_id}_{count}", clear_on_submit=False):
+        col1, col2 = st.columns(2)
         with col1:
-            st.text_input("Бортовой номер (ключ)", value=str(current_eq.get('eq_board', '')), disabled=True)
-            eq_model = st.text_input("Модель *", value=str(current_eq.get('eq_model', '')), key="update_eq_model").strip()              
+            eq_board = st.text_input("Бортовой номер *", value=str(current_eq.get('eq_board', '')), key=f"m_up_board_{equipment_id}_{count}").strip()
+            eq_model = st.text_input("Модель *", value=str(current_eq.get('eq_model', '')), key=f"m_up_model_{equipment_id}_{count}").strip()
+            eq_type = st.selectbox("Тип", FLEET_TYPES, index=type_index, key=f"m_up_type_{equipment_id}_{count}")
+            eq_serial = st.text_input("Серийный номер", value=get_clean_db_value(current_eq, 'eq_serial'), key=f"m_up_serial_{equipment_id}_{count}").strip()
         with col2:
-            eq_type = st.selectbox("Тип", FLEET_TYPES, index=type_index, key="update_eq_type")
-            eq_serial = st.text_input("Серийный номер", value=get_clean_db_value(current_eq, 'eq_serial'), key="update_eq_serial").strip()
-        with col3:
-            eq_year = st.text_input("Год производства", value=get_clean_db_value(current_eq, 'eq_year'), key="update_eq_year").strip()
-            eq_code = st.text_input("Код", value=get_clean_db_value(current_eq, 'eq_code'), key="update_eq_code").strip()                    
-        with col4:
-            eq_engine = st.text_input("ДВС", value=get_clean_db_value(current_eq, 'eq_engine'), key="update_eq_engine").strip()     
-            eq_engine_number = st.text_input("Номер двигателя", value=get_clean_db_value(current_eq, 'eq_engine_number'), key="update_eq_engine_num").strip()
+            eq_year = st.text_input("Год производства", value=get_clean_db_value(current_eq, 'eq_year'), key=f"m_up_year_{equipment_id}_{count}").strip()
+            eq_code = st.text_input("Код", value=get_clean_db_value(current_eq, 'eq_code'), key=f"m_up_code_{equipment_id}_{count}").strip()
+            eq_engine = st.text_input("ДВС", value=get_clean_db_value(current_eq, 'eq_engine'), key=f"m_up_engine_{equipment_id}_{count}").strip()
+            eq_engine_number = st.text_input("Номер двигателя", value=get_clean_db_value(current_eq, 'eq_engine_number'), key=f"m_up_engine_num_{equipment_id}_{count}").strip()
 
         st.write(" ")
         
-        # Строка разметки для кнопки и статуса в один ряд [1, 3]
-        btn_col, status_col = st.columns([1, 3])
-        
-        with btn_col:
-            submitted = st.form_submit_button("Обновить данные", width=250)
+        # Разметка подвала формы (Кнопка слева, Уведомления статуса справа)
+        btn_edit, status_edit = st.columns(2)
+        with btn_edit:
+            submitted = st.form_submit_button("Обновить данные", use_container_width=True)
             
-        status_placeholder = status_col.empty()
-        
-        # Если обновление прошло успешно, показываем исчезающий текст
+        status_placeholder = status_edit.empty()
+
+        # 🚨 ЗДЕСЬ ПОЯВЛЯЕТСЯ ЗЕЛЕНЫЙ ТЕКСТ УСПЕХА (Прямо в момент успешной записи)
         if st.session_state["show_update_success"]:
             status_placeholder.markdown('<div class="self-destruct-success">✅ Данные успешно обновлены!</div>', unsafe_allow_html=True)
-            st.session_state["show_update_success"] = False 
+            st.session_state["show_update_success"] = False # Сразу отключаем, чтобы не висел при повторном открытии
 
         if submitted:
             status_placeholder.empty()
-            
-            with status_placeholder.container():
-                if not eq_model:
-                    status_placeholder.markdown('<div class="self-destruct-error">❌ Поле "Модель" является обязательным для заполнения!</div>', unsafe_allow_html=True)
-                else:
-                    # В отличие от добавления, при изменении одной машины дубликаты по eq_board 
-                    # проверять не нужно, так как бортовой номер заблокирован (disabled=True).
+            if not eq_board or not eq_model:
+                status_placeholder.markdown('<div class="self-destruct-error">❌ Бортовой номер и Модель обязательны!</div>', unsafe_allow_html=True)
+            else:
+                is_duplicate = False
+                
+                # Композитная проверка дубликатов (Бортовой + Модель + Тип)
+                if not df_equipment.empty:
+                    match_board = df_equipment['eq_board'].astype(str).str.lower() == eq_board.lower()
+                    match_model = df_equipment['eq_model'].astype(str).str.lower() == eq_model.lower()
+                    match_type = df_equipment['eq_type'].astype(str).str.lower() == eq_type.lower()
+                    
+                    # Исключаем из проверки текущую машину по её ID
+                    duplicate_mask = match_board & match_model & match_type & (df_equipment['id'].astype(int) != equipment_id)
+                    
+                    if duplicate_mask.any():
+                        status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка: В базе уже существует точно такая же техника!</div>', unsafe_allow_html=True)
+                        is_duplicate = True
+
+                # Если строгих совпадений не обнаружено — отправляем коммит в базу
+                if not is_duplicate:
                     try:
                         db.update_equipment(
-                            equipment_id=equipment_id,
-                            eq_type=eq_type,
-                            eq_model=eq_model,
-                            eq_serial=eq_serial,
-                            eq_year=eq_year,
-                            eq_engine=eq_engine,
-                            eq_engine_number=eq_engine_number,
+                            equipment_id=equipment_id, 
+                            eq_board=eq_board,
+                            eq_type=eq_type, 
+                            eq_model=eq_model, 
+                            eq_serial=eq_serial, 
+                            eq_year=eq_year, 
+                            eq_engine=eq_engine, 
+                            eq_engine_number=eq_engine_number, 
                             eq_code=eq_code
                         )
-                        
-                        # Взводим флаг успеха и отправляем Streamlit на безопасный перезапуск
+                        # Активируем триггер анимации успеха
                         st.session_state["show_update_success"] = True
-                        st.rerun() 
                         
+                        # Обнуляем поисковый кэш, сдвигая счетчик Key Rotation вперед
+                        st.session_state["m_up_reset_counter"] += 1
+                        
+                        # Перезагружаем форму: карточка полей скроется, а зеленое сообщение появится
+                        st.rerun() 
                     except Exception as e:
-                        status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка при обновлении: {e}</div>', unsafe_allow_html=True)
+                        status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка: {e}</div>', unsafe_allow_html=True)
 
 
 
 
-def manual_delete_form(df_equipment: pd.DataFrame): # Accepts the preloaded DataFrame directly
-    """Equipment deletion form using passed DataFrame and dynamic text lookup."""
-    st.subheader("Удаление техники из базы данных")
+
+
+
+
+
+
+
+
+def reset_delete_modal_filters():
+    """Безопасно очищает кэш поиска внутри окна удаления без закрытия диалога."""
+    st.session_state["m_del_q"] = ""
+    st.session_state["m_del_t"] = "Все"
+    st.session_state["m_del_reset_counter"] += 1
+
+# 🚨 ФИКС: Убран неподдерживаемый параметр on_close, чтобы не вызывать падение
+@st.dialog("❌ Безвозвратное удаление техники")
+def manual_delete_modal(df_equipment: pd.DataFrame):
+    """Окно удаления техники со строгой параллельной версткой полей и сбросом."""
     
-    if df_equipment.empty:
-        st.info("Нет техники для удаления.")
+    if "show_delete_success" not in st.session_state:
+        st.session_state["show_delete_success"] = False
+
+    if "m_del_q" not in st.session_state: st.session_state["m_del_q"] = ""
+    if "m_del_t" not in st.session_state: st.session_state["m_del_t"] = "Все"
+    if "m_del_reset_counter" not in st.session_state: st.session_state["m_del_reset_counter"] = 0
+
+    count = st.session_state["m_del_reset_counter"]
+
+    # Ряд 1: Поля ввода параллельно в одну линию (50/50)
+    col_src, col_type = st.columns(2)
+    with col_src:
+        lookup_query = st.text_input(
+            "Бортовой номер техники", 
+            placeholder="Введите бортовой номер...",
+            key=f"m_del_board_input_{count}"
+        ).strip().lower()
+    with col_type:
+        type_options = ["Все"] + FLEET_TYPES
+        selected_type = st.selectbox(
+            "Тип техники", 
+            type_options, 
+            key=f"m_del_type_select_{count}"
+        )
+
+    # Ряд 2: Кнопки Найти и Сбросить под ними
+    btn_find_col, btn_reset_col = st.columns(2)
+    with btn_find_col:
+        trigger_find = st.button("🔍 Найти", type="primary", use_container_width=True, key="m_del_find_action_btn")
+    with btn_reset_col:
+        has_search = bool(st.session_state["m_del_q"] or st.session_state["m_del_t"] != "Все" or lookup_query or selected_type != "Все")
+        st.button(
+            "🔄 Сбросить", 
+            disabled=not has_search, 
+            use_container_width=True, 
+            key="m_del_reset_action_btn",
+            on_click=reset_delete_modal_filters
+        )
+
+    if trigger_find:
+        st.session_state["m_del_q"] = lookup_query
+        st.session_state["m_del_t"] = selected_type
+
+    # Показываем сообщение об успешном удалении прямо в окне
+    if st.session_state["show_delete_success"]:
+        st.markdown('<div class="self-destruct-success">🛑 Техника успешно удалена из системы!</div>', unsafe_allow_html=True)
+        st.session_state["show_delete_success"] = False 
+        st.session_state["m_del_q"] = ""
+        st.session_state["m_del_t"] = "Все"
         return
 
-    # 1. User types query first (does not preload anything automatically)
-    search_query = st.text_input(
-        "Поиск техники для удаления", 
-        placeholder="Введите бортовой номер, модель или тип...", 
-        key="delete_lookup_query"
-    ).strip().lower()
+    active_search = st.session_state["m_del_q"]
+    active_type = st.session_state["m_del_t"]
 
-    if not search_query:
-        st.info("Введите текст выше, чтобы найти нужную единицу техники.")
+    if not active_search and active_type == "Все":
+        st.info("Введите бортовой номер или выберите тип техники и нажмите 'Найти'.")
         return
 
-    # 2. Filter the ALREADY loaded DataFrame in memory (No database calls!)
     filtered = df_equipment.copy()
-    mask = (
-        filtered['eq_board'].astype(str).str.lower().str.contains(search_query, na=False) |
-        filtered['eq_model'].astype(str).str.lower().str.contains(search_query, na=False) |
-        filtered['eq_type'].astype(str).str.lower().str.contains(search_query, na=False)
-    )
-    filtered = filtered[mask]
+    if active_search:
+        mask = filtered['eq_board'].astype(str).str.lower().str.contains(active_search, na=False)
+        filtered = filtered[mask]
+    if active_type != "Все":
+        filtered = filtered[filtered['eq_type'] == active_type]
 
     if filtered.empty:
         st.error("Техника с такими параметрами не найдена.")
         return
 
-    # 3. Handle multiple search results with a clean display label
-    filtered['display_label'] = (
-        filtered['eq_board'].astype(str) + " | " + 
-        filtered['eq_type'].astype(str) + " | " + 
-        filtered['eq_model'].astype(str)
-    )
+    filtered['display_label'] = filtered['eq_board'].astype(str) + " | " + filtered['eq_type'].astype(str) + " | " + filtered['eq_model'].astype(str)
+    selected_label = st.selectbox("Выберите точную машину для УДАЛЕНИЯ:", filtered['display_label'].tolist(), key=f"modal_delete_target_{count}")
     
-    selected_label = st.selectbox(
-        f"Найдено совпадений: {len(filtered)}. Выберите точную машину:", 
-        filtered['display_label'].tolist(),
-        key="delete_exact_target"
-    )
-    
-    # 4. Extract targeted database primary key tracking id
-    current_eq = filtered[filtered['display_label'] == selected_label].iloc[0]
+    matched_rows = filtered[filtered['display_label'] == selected_label]
+    if matched_rows.empty:
+        st.error("Ошибка при выборе машины.")
+        return
+        
+    current_eq = matched_rows.iloc[0]
     equipment_id = int(current_eq['id'])
     selected_board = str(current_eq['eq_board'])
     
-    st.warning(f"⚠️ Вы собираетесь БЕЗВОЗВРАТНО удалить из базы данных: **{selected_label}**")
+    st.markdown(" ")
+    st.error(f"⚠️ **Внимание!** Вы собираетесь навсегда удалить из системы объект:  \n`{selected_label}`")
 
-    # 5. Form wrapper execution loop
-    with st.form("delete_equipment_form", clear_on_submit=True):
-        confirm_delete = st.checkbox("Я подтверждаю, что хочу безвозвратно удалить эту технику")
-        submitted = st.form_submit_button("Удалить технику из системы", type="primary")
+    with st.form(f"modal_delete_execution_form_{equipment_id}_{count}", clear_on_submit=True):
+        confirm_delete = st.checkbox("Я подтверждаю, что хочу удалить эту единицу из ERP системы")
+        submitted = st.form_submit_button("Удалить технику из базы", type="primary", use_container_width=True)
         
         if submitted:
             if not confirm_delete:
-                st.error("Пожалуйста, поставьте галочку подтверждения для удаления!")
+                st.error("Необходимо поставить галочку подтверждения операции!")
             else:
                 try:
-                    # Execute deletion directly using your global db module variable
                     db.delete_equipment(equipment_id=equipment_id)
-                    st.success(f"Машина {selected_board} успешно удалена из системы!")
-                    st.rerun()
+                    st.session_state["show_delete_success"] = True
+                    st.session_state["m_del_reset_counter"] += 1
+                    st.rerun() 
                 except Exception as e:
-                    st.error(f"Ошибка при удалении: {e}")
+                    st.error(f"Ошибка при удалении записи: {e}")
+
+
+
+
+
+
+
+
+
+                    
+                    
 
 def import_form():
     """Render Excel import form."""
@@ -655,28 +719,161 @@ def export_forms(export_buffer: io.BytesIO):
         type="secondary",
         width='stretch'
     )
+ 
+
+def equipment_tab():
+    """Render equipment management tab."""
+    # 1. Загружаем сырые данные из базы один раз
+    df_raw = db.load_equipment()
+    
+    if not df_raw.empty:
+        df_raw['eq_type'] = df_raw['eq_type'].astype(str).str.strip()
+
+    # Оставляем только импорт/экспорт (если админ хочет скачать файл, вы можете разместить это внизу страницы)
+    export_buffer = prepare_export_dataframe(df_raw)
+    
+    if df_raw.empty:
+        st.info("База данных пуста. Добавьте технику.")
+        # Если база пуста, показываем админу кнопку добавления прямо на экране
+        if st.session_state.role == "admin":
+            if st.button("➕ Добавить первую машину", type="primary"):
+                manual_add_modal(df_raw)
+        return
+    
+    # 2. Передаем сырые данные в фильтры. 
+    # Внутри этой функции отрисуются и инпуты поиска, и кнопки Добавить/Изменить/Удалить!
+    filtered_data = equipment_filters(df_raw)
+    
+    # 3. Выводим отфильтрованный результат в итоговую таблицу ниже управления
+    equipment_table(filtered_data)
+
+    
+
+
+
+# FIX: Change the header line to accept BOTH arguments
+def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
+    """Render admin panel with add, import, export functionality."""
+    with st.expander("Редактировать список техники", expanded=False):
+        tab1, tab2, tab3, tab4 = st.tabs(["Добавить технику", "Изменить данные", "Удалить единицу", "Загрузить или скачать список"])
+        
+        with tab1:
+            if st.button("➕ Добавить новую единицу", type="primary"):
+                
+            # manual_add_form(df_equipment)
+                manual_add_modal(df_equipment)
+        with tab2:
+            manual_update_form(df_equipment)            
+        with tab3:
+            manual_delete_form(df_equipment)
+        with tab4:
+            with st.container(border=True):
+                import_form()
+            with st.container(border=True):
+                export_forms(export_buffer)
+
+
+# Global clear callback function
+def clear_search_filters():
+    """Safely clear input caches in memory before page rendering."""
+    st.session_state["filter_search"] = ""
+    st.session_state["filter_type"] = "Все"
+    # Clear the form-specific locked values as well
+    if "submitted_search" in st.session_state:
+        st.session_state["submitted_search"] = ""
+    if "submitted_type" in st.session_state:
+        st.session_state["submitted_type"] = "Все"
+
 
 def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
-    """Render filter interface for equipment list."""
-    st.caption("Поиск техники")
+    """Отрендеренная панель поиска и управления с идеальным расположением кнопок в ряд."""
+    st.caption("Поиск и управление техникой")
     
+    # Инициализация состояний, если их нет
+    if "submitted_search" not in st.session_state:
+        st.session_state["submitted_search"] = ""
+    if "submitted_type" not in st.session_state:
+        st.session_state["submitted_type"] = "Все"
+
+    # РЯД 1: Поля ввода (Без st.form, чтобы не было подсказок "Press Enter")
     col1, col2 = st.columns(2)
-    
     with col1:
         search_query = st.text_input(
             "Поиск", 
+            value=st.session_state["submitted_search"],
             placeholder="Бортовой номер, модель...", 
             key="filter_search"
         )
     with col2:
         type_options = ["Все"] + FLEET_TYPES
-        selected_type = st.selectbox("Тип техники", type_options, key="filter_type")
+        try:
+            type_idx = type_options.index(st.session_state["submitted_type"])
+        except ValueError:
+            type_idx = 0
+        selected_type = st.selectbox("Тип техники", type_options, index=type_idx, key="filter_type")
+        
+    st.write(" ") # Небольшой зазор перед кнопками
+
+    # 🚨 РЕШЕНИЕ ПРОБЛЕМЫ 2: Единый ряд из кнопок. 
+    # Если админ: Найти (1) | Сбросить (1) | Добавить (1) | Изменить (1) | Удалить (1)
+    # Задаем сетку из 5 равных колонок
+    act_col1, act_col2, act_col3, act_col4, act_col5 = st.columns(5)
     
-    # Start with a clean copy of the data
+    with act_col1:
+        # Кнопка НАЙТИ теперь стоит на первом месте слева
+        if st.button("🔍 Найти", type="primary", use_container_width=True, key="main_search_submit_btn"):
+            st.session_state["submitted_search"] = search_query
+            st.session_state["submitted_type"] = selected_type
+            st.rerun()
+            
+    with act_col2:
+        # Кнопка СБРОСИТЬ фильтры стоит сразу же справа от нее
+        has_active_filters = bool(st.session_state["submitted_search"] or st.session_state["submitted_type"] != "Все")
+        st.button(
+            "🔄 Сбросить", 
+            disabled=not has_active_filters, 
+            use_container_width=True,
+            on_click=clear_search_filters,
+            key="main_search_reset_btn"
+        )
+
+    # Код кнопок управления внутри вашей функции equipment_filters
+    if st.session_state.get("role") == "admin":
+        with act_col3:
+            if st.button("➕ Добавить", use_container_width=True, key="panel_add_btn"):
+                manual_add_modal(df_equipment)
+                
+        with act_col4:
+            if st.button("📝 Изменить", use_container_width=True, key="panel_edit_btn"):
+                # 🚨 ПРЕВЕНТИВНЫЙ СБРОС: Стираем флаг успеха из памяти перед открытием окна!
+                st.session_state["show_update_success"] = False
+                
+                # Очищаем старый кэш поиска, как делали ранее
+                st.session_state["m_up_q"] = ""
+                st.session_state["m_up_t"] = "Все"
+                st.session_state["m_up_reset_counter"] = st.session_state.get("m_up_reset_counter", 0) + 1
+                
+                # Теперь безопасно открываем окно изменения
+                manual_update_modal(df_equipment)
+                
+        with act_col5:
+            if st.button("❌ Удалить", use_container_width=True, key="panel_delete_btn"):
+                # 🚨 Сначала очищаем старый кэш в памяти
+                st.session_state["m_del_q"] = ""
+                st.session_state["m_del_t"] = "Все"
+                st.session_state["m_del_reset_counter"] = st.session_state.get("m_del_reset_counter", 0) + 1
+                # Открываем окно
+                manual_delete_modal(df_equipment)
+
+    st.write("---")
+    
+    # Применение подтвержденной фильтрации к таблице
     filtered_df = df_equipment.copy()
-    
-    if search_query:
-        q = search_query.strip().lower()
+    confirm_q = st.session_state["submitted_search"]
+    confirm_type = st.session_state["submitted_type"]
+
+    if confirm_q:
+        q = confirm_q.strip().lower()
         mask = (
             filtered_df['eq_board'].astype(str).str.lower().str.contains(q, na=False) |
             filtered_df['eq_model'].astype(str).str.lower().str.contains(q, na=False) |
@@ -684,9 +881,9 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
         )
         filtered_df = filtered_df[mask]
     
-    if selected_type != "Все":
-        filtered_df = filtered_df[filtered_df['eq_type'] == selected_type]
-    
+    if confirm_type != "Все":
+        filtered_df = filtered_df[filtered_df['eq_type'] == confirm_type]
+        
     return filtered_df.reset_index(drop=True)
 
 
@@ -709,7 +906,106 @@ def equipment_table(df_to_display: pd.DataFrame):
     
     st.dataframe(display_df, column_config=column_config, use_container_width=True, hide_index=True)
 
+@st.dialog("➕ Добавить новую технику в базу")
+def manual_add_modal(df_equipment: pd.DataFrame):
+    """Render equipment addition form inside an isolated modal pop-up window."""
     
+    # Inject our smooth fade-out animation styles
+    st.markdown(
+        """
+        <style>
+        @keyframes fadeOutNotification {
+            0% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
+        }
+        .self-destruct-success {
+            color: #2e7d32;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.0s forwards;
+        }
+        .self-destruct-error {
+            color: #d32f2f;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: fadeOutNotification 3.5s forwards;
+        }
+        </style>
+        """, 
+        unsafe_allow_html=True
+    )
+
+    if "show_fade_success" not in st.session_state:
+        st.session_state["show_fade_success"] = False
+
+    # Inside modals, a standard 2-column or 1-column layout fits best horizontally
+    with st.form("modal_add_equipment_form", clear_on_submit=st.session_state["show_fade_success"]):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            eq_board = st.text_input("Бортовой номер *", key="add_eq_board").strip()
+            eq_model = st.text_input("Модель *", key="add_eq_model").strip()
+            eq_type = st.selectbox("Тип", FLEET_TYPES, key="add_eq_type")
+            eq_serial = st.text_input("Серийный номер", key="add_eq_serial").strip()
+        with col2:
+            eq_year = st.text_input("Год производства", placeholder="например: 2020", key="add_eq_year").strip()
+            eq_code = st.text_input("Код", key="add_eq_code").strip()                    
+            eq_engine = st.text_input("ДВС", key="add_eq_current_engine").strip()     
+            eq_engine_number = st.text_input("Номер двигателя", key="add_eq_engine_num").strip()
+            
+        st.write(" ")
+        
+        # Horizontal button status layout row inside modal bounding box
+        btn_col, status_col = st.columns([1, 2])
+        
+        with btn_col:
+            submitted = st.form_submit_button("Сохранить машину", width='stretch')
+            
+        status_placeholder = status_col.empty()
+        
+        if st.session_state["show_fade_success"]:
+            status_placeholder.markdown('<div class="self-destruct-success">✅ Машина успешно добавлена!</div>', unsafe_allow_html=True)
+            st.session_state["show_fade_success"] = False 
+
+        if submitted:
+            status_placeholder.empty()
+            
+            with status_placeholder.container():
+                if not eq_board or not eq_model:
+                    status_placeholder.markdown('<div class="self-destruct-error">❌ Заполните обязательные поля!</div>', unsafe_allow_html=True)
+                else:
+                    is_duplicate = False
+                    
+                    if not df_equipment.empty:
+                        match_board = df_equipment['eq_board'].astype(str).str.lower() == eq_board.lower()
+                        match_model = df_equipment['eq_model'].astype(str).str.lower() == eq_model.lower()
+                        exact_duplicate = match_board & match_model
+                        
+                        if exact_duplicate.any():
+                            matched_row = df_equipment[exact_duplicate].iloc[0]
+                            existing_type = matched_row.get('eq_type', '')
+                            
+                            status_placeholder.markdown(
+                                f'<div class="self-destruct-error">❌ Бортовой {eq_board} с моделью {eq_model} уже существует ({existing_type})!</div>', 
+                                unsafe_allow_html=True
+                            )
+                            is_duplicate = True
+
+                    if not is_duplicate:
+                        try:
+                            db.add_equipment(
+                                eq_board=eq_board, eq_type=eq_type, eq_model=eq_model,
+                                eq_serial=eq_serial, eq_year=eq_year, eq_engine=eq_engine,
+                                eq_engine_number=eq_engine_number, eq_code=eq_code
+                            )
+                            st.session_state["show_fade_success"] = True
+                            
+                            # 🚨 This automatically saves data, closes the modal window, and refreshes the main table!
+                            st.rerun() 
+                            
+                        except Exception as e:
+                            status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка: {e}</div>', unsafe_allow_html=True)
 
 
 def settings_tab():

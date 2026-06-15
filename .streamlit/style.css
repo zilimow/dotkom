@@ -87,3 +87,36 @@ button[data-baseweb="tab"][aria-selected="true"] {
     border-bottom-color: #140A9A !important; 
 }
 
+/* =========================================================================
+   5. АНИМАЦИИ И СТИЛИ УВЕДОМЛЕНИЙ В МОДАЛЬНЫХ ОКНАХ (DIALOGS)
+   ========================================================================= */
+
+@keyframes fadeOutNotification {
+    0% { opacity: 1; transform: translateY(0); }
+    85% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
+}
+
+/* Зеленое исчезающее уведомление об успехе */
+.self-destruct-success { 
+    color: #2e7d32 !important; 
+    font-weight: bold !important; 
+    margin-top: 10px !important; 
+    animation: fadeOutNotification 3.0s forwards !important; 
+} 
+
+/* Красное исчезающее уведомление об ошибке */
+.self-destruct-error { 
+    color: #d32f2f !important; 
+    font-weight: bold !important; 
+    margin-top: 10px !important; 
+    animation: fadeOutNotification 3.5s forwards !important; 
+}
+
+/* 🚨 ПОЛНОЕ СКРЫТИЕ ПОДСКАЗКИ "Press enter to submit form" */
+[data-testid="stForm"] [data-testid="stCaptionContainer"],
+form[data-testid="stForm"] div[data-testid="caption"] {
+    display: none !important;
+}
+
+
