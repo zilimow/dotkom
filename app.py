@@ -44,19 +44,6 @@ EXCEL_COLUMN_MAPPING = {
 # Display columns (without ID)
 DISPLAY_COLUMNS = ["eq_board", "eq_type", "eq_model", "eq_serial", "eq_year", "eq_engine", "eq_engine_number", "eq_code"]
 
-# Column configuration for dataframe display
-EQUIPMENT_CONFIG = {
-    "id": None,  # Hide ID from users
-    "eq_board": st.column_config.TextColumn("Бортовой номер", width=100),
-    "eq_type": st.column_config.SelectboxColumn("Тип", options=FLEET_TYPES, required=True, width=150),
-    "eq_model": st.column_config.TextColumn("Модель", width=150),
-    "eq_serial": st.column_config.TextColumn("Серийный номер (VIN)", width=180),        
-    "eq_year": st.column_config.TextColumn("Год производства", width=110),
-    "eq_engine": st.column_config.TextColumn("ДВС", width=150),
-    "eq_engine_number": st.column_config.TextColumn("Номер двигателя", width=150),
-    "eq_code": st.column_config.TextColumn("Код", width=90)
-}
-
 # ==================== HELPER FUNCTIONS ====================
 
 def load_external_css(file_path: str):
@@ -109,7 +96,7 @@ def app_header():
     st.markdown(f"""
         <style>
         .header-container-underlined {{
-            /* 🚨 ИСПРАВЛЕНИЕ: Убраны все отрицательные отступы. Линия теперь строго под размер приложения */
+            /*  ИСПРАВЛЕНИЕ: Убраны все отрицательные отступы. Линия теперь строго под размер приложения */
             width: 100% !important;
             box-sizing: border-box;
             
@@ -256,122 +243,7 @@ def prepare_export_dataframe(df: pd.DataFrame) -> io.BytesIO:
 
 
 
-def manual_add_form(df_equipment: pd.DataFrame):
-    """Отрисовка формы ручного добавления техники с адаптивным скрытием уведомлений."""
-    
-    #  CSS СТИЛИ ДЛЯ АНИМАЦИИ ИСЧЕЗНОВЕНИЯ УВЕДОМЛЕНИЙ ПОРЯДОК РЯДОМ С КНОПКОЙ
-    st.markdown(
-        """
-        <style>
-        @keyframes fadeOutNotification {
-            0% { opacity: 1; transform: translateY(0); }
-            85% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-5px); visibility: hidden; }
-        }
-        .self-destruct-success {
-            color: #2e7d32;
-            font-weight: bold;
-            margin-top: 10px;
-            animation: fadeOutNotification 3.0s forwards;
-        }
-        .self-destruct-error {
-            color: #d32f2f;
-            font-weight: bold;
-            margin-top: 10px;
-            animation: fadeOutNotification 3.5s forwards;
-        }
-        </style>
-        """, 
-        unsafe_allow_html=True
-    )
 
-    # Инициализация флага успешного сохранения в памяти сессии
-    if "show_fade_success" not in st.session_state:
-        st.session_state["show_fade_success"] = False
-
-    #  ИСПРАВЛЕНИЕ: Используем clear_on_submit=st.session_state["show_fade_success"], 
-    # но управляем им правильно, чтобы не ломать кэш виджетов при повторных кликах после ошибок.
-    with st.form("add_equipment_form", clear_on_submit=st.session_state["show_fade_success"]):
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            eq_board = st.text_input("Бортовой номер *", key="add_eq_board").strip()
-            eq_model = st.text_input("Модель *", key="add_eq_model").strip()
-        with col2:
-            eq_type = st.selectbox("Тип", FLEET_TYPES, key="add_eq_type")
-            eq_serial = st.text_input("Серийный номер", key="add_eq_serial").strip()
-        with col3:
-            eq_year = st.text_input("Год производства", placeholder="например: 2020", key="add_eq_year").strip()
-            eq_code = st.text_input("Код", key="add_eq_code").strip()                    
-        with col4:
-            eq_engine = st.text_input("ДВС", key="add_eq_current_engine").strip()     
-            eq_engine_number = st.text_input("Номер двигателя", key="add_eq_engine_num").strip()
-            
-        st.write(" ")
-        
-        # Строка разметки для кнопки и статуса в один ряд
-        btn_col, status_col = st.columns([1, 3])
-        
-        with btn_col:
-            submitted = st.form_submit_button("Сохранить", width=250)
-            
-        status_placeholder = status_col.empty()
-        
-        # Если прошлая итерация скрипта завершилась успехом, показываем красивый текст
-        if st.session_state["show_fade_success"]:
-            status_placeholder.markdown('<div class="self-destruct-success">Машина успешно добавлена!</div>', unsafe_allow_html=True)
-            st.session_state["show_fade_success"] = False 
-
-        if submitted:
-            # Сразу же очищаем старые сообщения об ошибках
-            status_placeholder.empty()
-            
-            with status_placeholder.container():
-                if not eq_board or not eq_model:
-                    status_placeholder.markdown('<div class="self-destruct-error">Заполните обязательные поля (Бортовой номер и Модель)!</div>', unsafe_allow_html=True)
-                else:
-                    is_duplicate = False
-                    
-                    # Сканируем базу данных на дубликаты
-                    if not df_equipment.empty:
-                        match_board = df_equipment['eq_board'].astype(str).str.lower() == eq_board.lower()
-                        match_model = df_equipment['eq_model'].astype(str).str.lower() == eq_model.lower()
-                        exact_duplicate = match_board & match_model
-                        
-                        if exact_duplicate.any():
-                            matched_row = df_equipment[exact_duplicate].iloc[0]
-                            existing_type = matched_row.get('eq_type', '')
-                            
-                            status_placeholder.markdown(
-                                f'<div class="self-destruct-error">Ошибка: Бортовой номер {eq_board} с моделью {eq_model} уже существует ({existing_type})!</div>', 
-                                unsafe_allow_html=True
-                            )
-                            is_duplicate = True
-
-                    # Если дубликатов нет, выполняем сохранение
-                    if not is_duplicate:
-                        try:
-                            db.add_equipment(
-                                eq_board=eq_board,
-                                eq_type=eq_type,
-                                eq_model=eq_model,
-                                eq_serial=eq_serial,
-                                eq_year=eq_year,
-                                eq_engine=eq_engine,
-                                eq_engine_number=eq_engine_number,
-                                eq_code=eq_code
-                            )
-                            
-                            # Переключаем флаг успеха и взводим автоматическую очистку для следующего рендеринга
-                            st.session_state["show_fade_success"] = True
-                            
-                            #  РЕШЕНИЕ: Вместо ручной перезаписи 'st.session_state', мы просто вызываем st.rerun().
-                            # Так как флаг "show_fade_success" теперь равен True, Streamlit при перезапуске 
-                            # увидит clear_on_submit=True, сам очистит форму и отобразит анимацию успеха.
-                            st.rerun() 
-                            
-                        except Exception as e:
-                            status_placeholder.markdown(f'<div class="self-destruct-error"> Ошибка при сохранении: {e}</div>', unsafe_allow_html=True)
 
 
 
@@ -663,55 +535,15 @@ def export_forms(export_buffer: io.BytesIO):
  
 
 def equipment_tab():
-    """Render equipment management tab."""
-    # 1. Загружаем сырые данные из базы один раз
+    """Отображение вкладки управления техникой"""
+    # Загружаем сырые данные из базы данных 
     df_raw = db.load_equipment()
     
-    if not df_raw.empty:
-        df_raw['eq_type'] = df_raw['eq_type'].astype(str).str.strip()
-
-    # Оставляем только импорт/экспорт (если админ хочет скачать файл, вы можете разместить это внизу страницы)
-    export_buffer = prepare_export_dataframe(df_raw)
-    
-    if df_raw.empty:
-        st.info("База данных пуста. Добавьте технику.")
-        # Если база пуста, показываем админу кнопку добавления прямо на экране
-        if st.session_state.role == "admin":
-            if st.button("➕ Добавить первую машину", type="primary"):
-                manual_add_modal(df_raw)
-        return
-    
-    # 2. Передаем сырые данные в фильтры. 
-    # Внутри этой функции отрисуются и инпуты поиска, и кнопки Добавить/Изменить/Удалить!
+    # 
     filtered_data = equipment_filters(df_raw)
     
-    # 3. Выводим отфильтрованный результат в итоговую таблицу ниже управления
+    # Выводим отфильтрованный результат в итоговую таблицу
     equipment_table(filtered_data)
-
-    
-
-
-
-# FIX: Change the header line to accept BOTH arguments
-def admin_panel(export_buffer: io.BytesIO, df_equipment: pd.DataFrame):
-    """Render admin panel with add, import, export functionality."""
-    with st.expander("Редактировать список техники", expanded=False):
-        tab1, tab2, tab3, tab4 = st.tabs(["Добавить технику", "Изменить данные", "Удалить единицу", "Загрузить или скачать список"])
-        
-        with tab1:
-            if st.button("➕ Добавить новую единицу", type="primary"):
-                
-            # manual_add_form(df_equipment)
-                manual_add_modal(df_equipment)
-        with tab2:
-            manual_update_form(df_equipment)            
-        with tab3:
-            manual_delete_form(df_equipment)
-        with tab4:
-            with st.container(border=True):
-                import_form()
-            with st.container(border=True):
-                export_forms(export_buffer)
 
 
 # Global clear callback function
@@ -727,8 +559,7 @@ def clear_search_filters():
 
 
 def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
-    """Отрендеренная панель поиска и управления с идеальным расположением кнопок в ряд."""
-    st.caption("Поиск и управление техникой")
+    """Панель поиска и управления с расположением кнопок в ряд."""
     
     # Инициализация состояний, если их нет
     if "submitted_search" not in st.session_state:
@@ -740,9 +571,8 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
     col1, col2 = st.columns(2)
     with col1:
         search_query = st.text_input(
-            "Поиск", 
+            "Поиск по ключевым словам", 
             value=st.session_state["submitted_search"],
-            placeholder="Бортовой номер, модель...", 
             key="filter_search"
         )
     with col2:
@@ -755,14 +585,11 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
         
     st.write(" ") # Небольшой зазор перед кнопками
 
-    # 🚨 РЕШЕНИЕ ПРОБЛЕМЫ 2: Единый ряд из кнопок. 
-    # Если админ: Найти (1) | Сбросить (1) | Добавить (1) | Изменить (1) | Удалить (1)
-    # Задаем сетку из 5 равных колонок
     act_col1, act_col2, act_col3, act_col4, act_col5 = st.columns(5)
     
     with act_col1:
         # Кнопка НАЙТИ теперь стоит на первом месте слева
-        if st.button("🔍 Найти", type="primary", width='stretch', key="main_search_submit_btn"):
+        if st.button(":material/search: Найти", type="primary", width='stretch', key="main_search_submit_btn", ):
             st.session_state["submitted_search"] = search_query
             st.session_state["submitted_type"] = selected_type
             st.rerun()
@@ -771,7 +598,7 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
         # Кнопка СБРОСИТЬ фильтры стоит сразу же справа от нее
         has_active_filters = bool(st.session_state["submitted_search"] or st.session_state["submitted_type"] != "Все")
         st.button(
-            "🔄 Сбросить", 
+            ":material/refresh: Сбросить", 
             disabled=not has_active_filters, 
             width='stretch',
             on_click=clear_search_filters,
@@ -863,12 +690,29 @@ def equipment_table(df_to_display: pd.DataFrame):
 
 @st.dialog("➕ Добавить новую технику в базу")
 def manual_add_modal(df_equipment: pd.DataFrame):
-    """Render equipment addition form inside an isolated modal pop-up window with composite validation."""
+    """Форма добавления техники внутри модального окна с композитной проверкой дубликатов."""
     
-    if "show_fade_success" not in st.session_state:
-        st.session_state["show_fade_success"] = False
-
     with st.form("modal_add_equipment_form", clear_on_submit=False):
+        st.markdown(
+            """
+            <style>
+            /* Скрывает текст подсказки в самом низу формы */
+            .stForm [data-testid="caption"],
+            .stForm [data-testid="stCaptionContainer"],
+            [data-testid="stFormSubmitButton"] + div,
+            form div:last-child {
+                display: none !important;
+                height: 0px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                visibility: hidden !important;
+                font-size: 0px !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -883,11 +727,7 @@ def manual_add_modal(df_equipment: pd.DataFrame):
             eq_engine_number = st.text_input("Номер двигателя", key="add_eq_engine_num").strip()
             
         st.write(" ")
-        
-        # Кнопка сохранения на полную ширину
         submitted = st.form_submit_button("Сохранить машину", use_container_width=True)
-            
-        # Слот для статуса строго ПОД кнопкой сохранения
         status_placeholder = st.empty()
 
         if submitted:
@@ -899,42 +739,37 @@ def manual_add_modal(df_equipment: pd.DataFrame):
                 else:
                     is_duplicate = False
                     
-                    # 🚨 УПРАВЛЕНИЕ ОШИБКОЙ ДУБЛИКАТОВ: Строгая композитная проверка по 3 параметрам
                     if not df_equipment.empty:
+                        # 🚨 ИСПРАВЛЕНИЕ: Проверяем ОДНОВРЕМЕННОЕ совпадение Борта, Модели и Типа техники
                         match_board = df_equipment['eq_board'].astype(str).str.lower() == eq_board.lower()
                         match_model = df_equipment['eq_model'].astype(str).str.lower() == eq_model.lower()
-                        match_type = df_equipment['eq_type'].astype(str).str.lower() == eq_type.lower() # ➕ Добавили тип!
+                        match_type = df_equipment['eq_type'].astype(str).str.lower() == eq_type.lower()
                         
-                        # Точный дубликат признаётся ТОЛЬКО если совпали Бортовой И Модель И Тип одновременно
                         exact_duplicate = match_board & match_model & match_type
                         
                         if exact_duplicate.any():
+                            # Ошибка вызовется только если вы попытаетесь забить абсолютно идентичную машину
                             status_placeholder.markdown(
                                 f'<div class="self-destruct-error">❌ Ошибка: В базе уже существует **{eq_type}** с бортовым **{eq_board}** и моделью **{eq_model}**!</div>', 
                                 unsafe_allow_html=True
                             )
                             is_duplicate = True
 
-                    # Если строгий дубликат не найден — выполняем физическую запись в БД
                     if not is_duplicate:
                         try:
+                            # ИСПРАВЛЕНО: Аргумент заменен на eq_code
                             db.add_equipment(
                                 eq_board=eq_board, eq_type=eq_type, eq_model=eq_model,
                                 eq_serial=eq_serial, eq_year=eq_year, eq_engine=eq_engine,
                                 eq_engine_number=eq_engine_number, eq_code=eq_code
                             )
                             
-                            # Выводим текст успеха мгновенно под кнопкой
                             status_placeholder.markdown('<div class="self-destruct-success">✅ Машина успешно добавлена в базу!</div>', unsafe_allow_html=True)
-                            
-                            # Выдерживаем задержку, чтобы оператор прочитал надпись
                             time.sleep(1.2)
-                            
-                            # Перезапускаем страницу — таблица на фоне обновится, а окно закроется сама
                             st.rerun() 
                             
                         except Exception as e:
-                            status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка: {e}</div>', unsafe_allow_html=True)
+                            status_placeholder.markdown(f'<div class="self-destruct-error">❌ Ошибка сохранения (возможно, база данных еще не сброшена): {e}</div>', unsafe_allow_html=True)
 
 
 
@@ -942,18 +777,18 @@ def manual_add_modal(df_equipment: pd.DataFrame):
 
 def settings_tab():
     """Render settings and authentication tab."""
-    col1, _, col3 = st.columns([3.5, 6, 1.8])
+    col1, col2 = st.columns([4, 2])
     
     with col1:
         st.write("Настройки приложения")
            
-    with col3:
+    with col2:
         if st.session_state.role == "admin":
             if st.button("Завершить сеанс", type="primary", width='stretch'):
                 st.session_state.role = "guest"
                 st.rerun()
         else:
-            password = st.text_input( "Пароль", type="password", placeholder="Введите пароль", label_visibility="collapsed")
+            password = st.text_input( "Пароль", placeholder="Введите пароль", label_visibility="collapsed", width="stretch")
             if password:
                 try:
                     if password.strip() == st.secrets["credentials"]["admin_password"]:

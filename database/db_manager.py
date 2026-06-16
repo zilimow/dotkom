@@ -47,6 +47,7 @@ def init_db():
     with get_connection_context() as conn:
         cursor = conn.cursor()
         
+        # 🚨 ИСПРАВЛЕНИЕ: Изменили UNIQUE(eq_board, eq_model) на композитный ключ из 3 колонок!
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS equipment (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +61,7 @@ def init_db():
                 eq_code TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(eq_board, eq_model)
+                UNIQUE(eq_board, eq_model, eq_type)
             )
         """)
         
@@ -82,11 +83,13 @@ def load_equipment():
         return df
 
 def add_equipment(eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code):
-    """Add new equipment to database."""
+    """Add new equipment to database safely without erasing different types."""
     with get_connection_context() as conn:
         cursor = conn.cursor()
+        # 🚨 ИСПРАВЛЕНИЕ: Безопасный INSERT. Если связка Борт+Модель+Тип уже есть — СУБД выдаст ошибку,
+        # а не сотрет данные молча, как делал OR REPLACE. Валидация контролируется в Streamlit.
         cursor.execute("""
-            INSERT OR REPLACE INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code)
+            INSERT INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code))
 
@@ -124,46 +127,6 @@ def get_unique_types():
         if not types:
             types = ["Гусеничный экскаватор", "Самосвал", "Фронтальный погрузчик", "Автогрейдер"]
         return types
-
-
-# def import_equipment_dataframe(df_excel):
-#     """Bulk import/update equipment from DataFrame."""
-#     if df_excel.empty:
-#         return 0
-        
-#     with get_connection_context() as conn:
-#         cursor = conn.cursor()
-        
-#         query = """
-#             INSERT INTO equipment (eq_board, eq_type, eq_model, eq_serial, eq_year, eq_engine, eq_engine_number, eq_code)
-#             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-#             ON CONFLICT(eq_board, eq_model) DO UPDATE SET
-#                 eq_type = excluded.eq_type,
-#                 eq_serial = excluded.eq_serial,
-#                 eq_year = excluded.eq_year,
-#                 eq_engine = excluded.eq_engine,
-#                 eq_engine_number = excluded.eq_engine_number,
-#                 eq_code = excluded.eq_code
-#         """
-        
-#         # Prepare data - keep year as is, don't fill NA
-#         data_to_insert = []
-#         for _, row in df_excel.iterrows():
-#             year_value = row['eq_year'] if pd.notna(row['eq_year']) else None
-#             data_to_insert.append((
-#                 row['eq_board'] if pd.notna(row['eq_board']) else None,
-#                 row['eq_type'] if pd.notna(row['eq_type']) else None,
-#                 row['eq_model'] if pd.notna(row['eq_model']) else None,
-#                 row['eq_serial'] if pd.notna(row['eq_serial']) else None,
-#                 year_value,
-#                 row['eq_engine'] if pd.notna(row['eq_engine']) else None,
-#                 row['eq_engine_number'] if pd.notna(row['eq_engine_number']) else None,
-#                 row['eq_code'] if pd.notna(row['eq_code']) else None
-#             ))
-        
-#         cursor.executemany(query, data_to_insert)
-#         affected_rows = cursor.rowcount
-#         return affected_rows
 
 
 def get_equipment_statistics():

@@ -2,9 +2,10 @@
 /* Скрывает изображение глаза в окне ввода пароля */
 [data-testid="stTextInput"] button {
     display: none !important;
+}
+
 
 /* Дополнительная проверка скрытия изображение глаза в окне ввода пароля */
-}
 [data-testid="stTextInputPasswordFieldVisibilityToken"] {
     display: none !important;
 }
@@ -101,7 +102,8 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .self-destruct-success { 
     color: #2e7d32 !important; 
     font-weight: bold !important; 
-    margin-top: 10px !important; 
+    margin-top: 25px !important; 
+    margin-bottom: 35px !important; /* ➕ Увеличили отступ снизу, чтобы окно не поджимало текст */
     animation: fadeOutNotification 3.0s forwards !important; 
 } 
 
@@ -109,14 +111,117 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .self-destruct-error { 
     color: #d32f2f !important; 
     font-weight: bold !important; 
-    margin-top: 10px !important; 
+    margin-top: 25px !important; 
+    margin-bottom: 35px !important; /* ➕ Увеличили отступ снизу, чтобы окно не поджимало текст */
     animation: fadeOutNotification 3.5s forwards !important; 
 }
 
-/* 🚨 ПОЛНОЕ СКРЫТИЕ ПОДСКАЗКИ "Press enter to submit form" */
-[data-testid="stForm"] [data-testid="stCaptionContainer"],
-form[data-testid="stForm"] div[data-testid="caption"] {
-    display: none !important;
+/* --- Input field --- */
+
+/* Задает рамку и чистый белый фон для контейнера поля ввода */
+[data-testid="stTextInput"] div[data-baseweb="input"] {
+    border: 0.5px solid #140A9A !important; /* Ваша фирменная синяя рамка */
+    border-radius: 4px !important;         /* Легкое скругление */
+    background-color: #ffffff !important;   /* Белый фон контейнера */
 }
 
 
+
+
+/* --- Button --- */
+
+/* Стандартное состояние для главных кнопок типа primary (например, Найти, Сохранить новую) */
+[data-testid="stBaseButton-primary"] {
+    border: 1px solid #140A9A !important;  /* Синий контур */
+    border-radius: 4px !important;
+    background-color: #140A9A !important;  /* Сплошная синяя заливка */
+    color: #ffffff !important;             /* Белый текст */
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Эффект при наведении курсора на главную (primary) кнопку */
+[data-testid="stBaseButton-primary"]:hover {
+    background-color: #2e7d32 !important;  /* Смена заливки на зеленую */
+    border-color: #2e7d32 !important;      /* Смена контура на зеленый */
+    color: #ffffff !important;
+}
+
+/* Стандартное (базовое) состояние для всех кнопок типа secondary (например, Сбросить, Сохранить) */
+[data-testid="stBaseButton-secondary"] {
+    border: 1px solid #140A9A !important;  /* Строгий синий контур в тон полей ввода */
+    border-radius: 4px !important;         /* Одинаковое скругление углов */
+    background-color: #ffffff !important;   /* Чистый белый фон кнопки */
+    color: #140A9A !important;             /* Синий цвет текста */
+    font-weight: 600 !important;           /* Полужирный текст для читаемости */
+    transition: all 0.2s ease !important;  /* Плавный переход цвета при наведении */
+}
+
+/* Эффект при наведении курсора на обычную кнопку */
+[data-testid="stBaseButton-secondary"]:hover {
+    border-color: #2e7d32 !important;      /* Контур становится зеленым */
+    color: #2e7d32 !important;             /* Текст становится зеленым */
+    background-color: #f1f8e9 !important;   /* Мягкий светло-зеленый фон */
+}
+
+/* Стиль для заблокированных (disabled) кнопок (например, Сброс, когда фильтры пусты) */
+[data-testid="stBaseButton-secondary"]:disabled,
+[data-testid="stBaseButton-primary"]:disabled {
+    border-color: #cbd5e1 !important;      /* Мягкий серый контур */
+    background-color: #f8fafc !important;   /* Серый фон */
+    color: #94a3b8 !important;             /* Блеклый текст */
+    cursor: not-allowed !important;
+}
+
+
+/* --- SELECTBOX --- */
+
+/* Базовое состояние selectbox */
+[data-testid="stSelectbox"] div[data-baseweb="select"] {
+    border: 0.5px solid #140A9A !important; 
+    border-radius: 4px !important;         
+    background-color: #ffffff !important;   
+    box-shadow: none !important;           
+}
+
+/* Полный сброс двойных рамок и жирного выделения во время ввода (фокуса) */
+[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within,
+[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within > div,
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stSelectbox"] div[data-baseweb="select"] input {
+    border: none !important;               /* Убираем внутренние дублирующие рамки */
+    outline: none !important;              /* Сбрасываем стандартный контур браузера */
+    box-shadow: none !important;           /* Полностью гасим широкое синее свечение */
+    border-radius: 4px !important;         /* Гарантируем острые углы при вводе */
+}
+
+/* Фиксация внешней рамки в активном состоянии, чтобы она не исчезала */
+[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
+    border: 0.5px solid #140A9A !important; /* Оставляем только вашу тонкую линию */
+}
+
+/* Стили для всплывающего окна с вариантами */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+div[data-baseweb="popover"] ul,
+div[data-baseweb="menu"] {
+    border-radius: 4px !important;         
+    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1) !important; 
+}
+
+/* Совпадение скругления плашки выделения внутри меню со стилем самого selectbox */
+div[data-baseweb="menu"] li:hover,
+div[data-baseweb="menu"] li[aria-selected="true"],
+div[data-baseweb="menu"] li[data-highlighted="true"] {
+    border-radius: 4px !important; /* Серый ховер теперь тоже аккуратно скруглен на 4px */
+}
+
+/* Приподнимаем сам контейнер селектбокса, чтобы выровнять его по одной линии с текстовым полем */
+[data-testid="stSelectbox"] {
+    margin-top: -1.5px !important; 
+}
+
+/* Выравниваем высоту блока внутри, компенсируя разницу в толщине рамок (1px vs 0.5px) */
+[data-testid="stSelectbox"] div[data-baseweb="select"] {
+    height: calc(100% + 1px) !important; 
+}   
