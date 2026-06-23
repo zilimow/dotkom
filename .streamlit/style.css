@@ -20,11 +20,12 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
+
 /* ---Изменение названия программы---*/
 
 /* Изменяет растояние названия программы от верхней границы страницы */
 .block-container {
-    padding-top: 1rem !important;
+    padding-top: 0rem !important;
     padding-left: 5rem !important;
     padding-right: 5rem !important;
 }
@@ -65,7 +66,7 @@ header[data-testid="stHeader"] {
 
 /* Размер шрифта вкладок*/
 button[data-baseweb="tab"] p {
-    font-size: 18px !important;      
+    font-size: 22px !important;      
     font-weight: 600 !important;     
 }
 
@@ -83,10 +84,7 @@ button[data-baseweb="tab"][aria-selected="true"] p {
     color: #140A9A !important;       /* Фирменный цвет Komatsu Blue для активного текста */
 }
 
-/* Цвет линии подчеркивания */
-button[data-baseweb="tab"][aria-selected="true"] {
-    border-bottom-color: #140A9A !important; 
-}
+
 
 /* =========================================================================
    5. АНИМАЦИИ И СТИЛИ УВЕДОМЛЕНИЙ В МОДАЛЬНЫХ ОКНАХ (DIALOGS)

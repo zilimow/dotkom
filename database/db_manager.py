@@ -28,11 +28,6 @@ class DatabaseError(Exception):
     pass
 
 
-def get_connection():
-    """Return database connection."""
-    return sqlite3.connect(DB_FILE)
-
-
 @contextmanager
 def get_connection_context():
     """Context manager for database connections."""
@@ -56,8 +51,6 @@ def init_db():
     """Initialize database with all required tables and indexes."""
     with get_connection_context() as conn:
         cursor = conn.cursor()
-        
-        # 🚨 ИСПРАВЛЕНИЕ: Изменили UNIQUE(eq_board, eq_model) на композитный ключ из 3 колонок!
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS equipment (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,19 +148,32 @@ def get_equipment_statistics():
 
 
 def generate_equipment_blank_template() -> io.BytesIO:
-    """Генерация чистого Excel-шаблона с готовой шириной столбцов для импорта техники."""
+    """Генерация чистого Excel-шаблона с красивой жирной шапкой и готовой шириной столбцов."""
     output = io.BytesIO()
     
     df_blank = pd.DataFrame(columns=COLUMNS_EQUIPMENT)
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_blank.to_excel(writer, sheet_name="Шаблон_Техники", index=False)
-        worksheet = writer.sheets["Шаблон_Техники"]
+        df_blank.to_excel(writer, sheet_name="Техника", index=False)
+        worksheet = writer.sheets["Техника"]
         
-        # Выставляем фиксированную ширину ячеек (F, G, H скорректированы под новый порядок)
+        # 1. Стилизация шапки (как в основном экспорте)
+        font_header = Font(name="Calibri", size=13, bold=True)
+        center_alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Устанавливаем увеличенную высоту для строки заголовков
+        worksheet.row_dimensions[1].height = 26
+        
+        # Применяем жирный шрифт и центрирование к каждой ячейке шапки
+        for col_idx in range(1, len(COLUMNS_EQUIPMENT) + 1):
+            cell = worksheet.cell(row=1, column=col_idx)
+            cell.font = font_header
+            cell.alignment = center_alignment
+        
+        # 2. Выставляем фиксированную ширину ячеек
         column_widths = {
-            "A": 20, "B": 28, "C": 22, "D": 25, 
-            "E": 20, "F": 28, "G": 25, "H": 18
+            "A": 22, "B": 28, "C": 22, "D": 25, 
+            "E": 25, "F": 28, "G": 25, "H": 18
         }
         
         for col, width in column_widths.items():
@@ -178,9 +184,11 @@ def generate_equipment_blank_template() -> io.BytesIO:
 
 
 def import_equipment_from_excel(uploaded_file) -> tuple[bool, str]:
-    """Чтение Excel-файла, жесткая очистка от None/float и импорт в SQLite."""
+    """Чтение Excel-файла, жесткая очистка от грязи и безопасный импорт в SQLite 
+    БЕЗ ПЕРЕТИРАНИЯ существующих записей в базе данных.
+    """
     try:
-        # Шаг 1: Чтение файла (загружаем всё как текст, чтобы избежать автоматического float)
+        # Шаг 1: Чтение файла (загружаем всё как текст)
         df = pd.read_excel(uploaded_file, sheet_name=0, dtype=str)
         
         if df.empty:
@@ -194,58 +202,93 @@ def import_equipment_from_excel(uploaded_file) -> tuple[bool, str]:
         # Заменяем реальные NaN/None от pandas на пустые строки
         df = df.fillna("")
         
-        # Удаляем только те строки, где ВООБЩЕ нет никаких данных (полностью пустые строки в Excel)
+        # Удаляем строки, где вообще не заполнен Тип техники
         df = df[df["Тип техники"].astype(str).str.strip() != ""]
         
         if df.empty:
             return False, "В файле нет валидных строк (пропущен Тип техники)."
 
-        # Шаг 3: Точечная очистка каждой ячейки и генерация бортового номера, если его нет
+        # Очистка ячеек от грязи системных типов (.0, nan)
         bn_counter = 1
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip()
             df[col] = df[col].replace({"None": "", "nan": "", "None.0": "", "nan.0": ""})
             df[col] = df[col].str.replace(r"\.0$", "", regex=True)
 
-        # Отдельно обрабатываем Бортовой номер ПОСЛЕ очистки от грязи
+        # Обрабатываем пустые бортовые номера
         for index, row in df.iterrows():
             if row["Бортовой номер"] == "":
-                # Если номера нет, пишем "б/н" и добавляем индекс строки, чтобы избежать дублирования в UNIQUE
-                df.at[index, "Бортовой номер"] = f"б/н-{bn_counter}"
+                df.at[index, "Бортовой number"] = f"б/н-{bn_counter}"
                 bn_counter += 1
 
-        # Шаг 4: Запись в базу данных
+        # --- ГЛАВНЫЙ ФИЛЬТР ЗАЩИТЫ ОТ ПЕРЕТИРАНИЯ ---
+        # Выкачиваем текущую базу, чтобы сравнить дубликаты прямо в памяти
+        with get_connection_context() as conn:
+            df_current = pd.read_sql_query("SELECT eq_board, eq_model, eq_type FROM equipment", conn)
+        
+        # Собираем множество существующих машин по правилу UNIQUE вашей БД (Бортовой + Модель + Тип)
+        # Переводим в нижний регистр для точного сравнения без учета регистра
+        existing_records = set()
+        if not df_current.empty:
+            for _, r in df_current.iterrows():
+                key = (str(r['eq_board']).lower().strip(), 
+                       str(r['eq_model']).lower().strip(), 
+                       str(r['eq_type']).lower().strip())
+                existing_records.add(key)
+
         inserted_count = 0
+        skipped_count = 0
+
+        # Шаг 4: Запись в базу данных
         with get_connection_context() as conn:
             cursor = conn.cursor()
             
             for _, row in df.iterrows():
+                # Строим проверочный ключ для текущей строки из файла
+                row_key = (row["Бортовой номер"].lower(), 
+                           row["Модель"].lower(), 
+                           row["Тип техники"].lower())
+                
+                # 🚨 ЗАЩИТА: Если такая связка уже есть в базе — пропускаем строку, ничего не перетирая!
+                if row_key in existing_records:
+                    skipped_count += 1
+                    continue
+                
                 try:
+                    # Использован чистый INSERT. Он не перезапишет строку в случае коллизии
                     cursor.execute("""
                         INSERT OR IGNORE INTO equipment (
                             eq_board, eq_type, eq_model, eq_serial, eq_year, 
                             eq_engine, eq_engine_number, eq_code
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        row["Бортовой номер"],   # eq_board
-                        row["Тип техники"],      # eq_type
-                        row["Модель"],           # eq_model
-                        row["Серийный номер"],   # eq_serial
-                        row["Год производства"], # eq_year
-                        row["ДВС"],              # eq_engine
-                        row["Номер двигателя"],  # eq_engine_number
-                        row["Код"]               # eq_code
+                        row["Бортовой номер"],   
+                        row["Тип техники"],      
+                        row["Модель"],           
+                        row["Серийный номер"],   
+                        row["Год производства"], 
+                        row["ДВС"],              
+                        row["Номер двигателя"],  
+                        row["Код"]               
                     ))
                     if cursor.rowcount > 0:
                         inserted_count += 1
+                    else:
+                        skipped_count += 1
                 except sqlite3.Error as e:
                     logger.warning(f"Ошибка импорта строки {row['Бортовой номер']}: {e}")
+                    skipped_count += 1
                     continue
                     
+        # Выдаем детальный развернутый отчет оператору РММ
         if inserted_count == 0:
-            return True, "Новых записей не добавлено. Вся техника из файла уже присутствует в базе."
+            return True, f"Импорт завершен. Все машины ({skipped_count} шт.) из файла уже есть в базе. Никакие данные не были изменены."
             
-        return True, f"Успешно импортировано новых записей: {inserted_count} из {len(df)}."
+        msg = f"Успешно добавлено новых машин: {inserted_count}."
+        if skipped_count > 0:
+            msg += f" Пропущено дубликатов: {skipped_count} шт. (база защищена от перетирания)."
+            
+        return True, msg
         
     except Exception as e:
         logger.error(f"Ошибка импорта: {e}")
