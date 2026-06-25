@@ -1,7 +1,8 @@
 from openpyxl.utils import get_column_letter
 import database.db_manager as db
-from pathlib import Path
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import threading
@@ -114,12 +115,6 @@ def app_header():
     
 
 
-
-
-
-
-
-
 def reset_update_modal_filters():
     """Сброс фильтров поиска внутри модального окна редактирования."""
     st.session_state["m_up_q"] = ""
@@ -163,7 +158,7 @@ def manual_update_modal(df_equipment: pd.DataFrame):
         trigger_find = st.button(
             "🔍 Найти",
             type="primary",
-            use_container_width=True,
+            width='stretch',
             key="m_up_find_action_btn",
         )
     with btn_reset_col:
@@ -176,7 +171,7 @@ def manual_update_modal(df_equipment: pd.DataFrame):
         st.button(
             "🔄 Сбросить",
             disabled=not has_search,
-            use_container_width=True,
+            width='stretch',
             key="m_up_reset_action_btn",
             on_click=reset_update_modal_filters,
         )
@@ -308,7 +303,7 @@ def manual_update_modal(df_equipment: pd.DataFrame):
 
         st.write(" ")
         submitted = st.form_submit_button(
-            "Обновить данные", use_container_width=True
+            "Обновить данные", width='stretch'
         )
 
         status_placeholder = st.empty()
@@ -424,7 +419,7 @@ def manual_delete_modal(df_equipment: pd.DataFrame):
         trigger_find = st.button(
             "🔍 Найти",
             type="primary",
-            use_container_width=True,
+            width='stretch',
             key="m_del_find_action_btn",
         )
     with btn_reset_col:
@@ -437,7 +432,7 @@ def manual_delete_modal(df_equipment: pd.DataFrame):
         st.button(
             "🔄 Сбросить",
             disabled=not has_search,
-            use_container_width=True,
+            width='stretch',
             key="m_del_reset_action_btn",
             on_click=reset_delete_modal_filters,
         )
@@ -513,7 +508,7 @@ def manual_delete_modal(df_equipment: pd.DataFrame):
             "Я подтверждаю, что хочу удалить эту единицу из ERP системы"
         )
         submitted = st.form_submit_button(
-            "Удалить технику из базы", type="primary", use_container_width=True
+            "Удалить технику из базы", type="primary", width='stretch'
         )
 
         status_placeholder = st.empty()
@@ -601,7 +596,7 @@ def manual_add_modal(df_equipment: pd.DataFrame):
 
         st.write(" ")
         submitted = st.form_submit_button(
-            "Сохранить машину", use_container_width=True
+            "Сохранить машину", width='stretch'
         )
         status_placeholder = st.empty()
 
@@ -679,25 +674,14 @@ def equipment_tab():
     
     # Выводим панель фильтрации техники
     filtered_data = equipment_filters(df_raw)
-    
-   
+       
     equipment_table_info(filtered_data)
         
-
-        
-
-        
-
-
-        
+       
         
 def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
-    """Панель поиска и управления с широким полем ключевых слов на первом месте,
-
-    точечным бортовым номером на втором и без лишних подсказок.
-    """
-
-
+    """Панель поиска и управления с широким полем ключевых слов на первом месте, точечным бортовым номером на втором."""
+    
     # Инициализация состояний сессии
     if "submitted_search" not in st.session_state:
         st.session_state["submitted_search"] = ""
@@ -793,7 +777,7 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
         if st.button(
             ":material/search: Показать",
             type="primary",
-            use_container_width=True,
+            width='stretch',
             key="main_search_submit_btn",
         ):
             st.session_state["submitted_search"] = search_query
@@ -812,7 +796,7 @@ def equipment_filters(df_equipment: pd.DataFrame) -> pd.DataFrame:
         st.button(
             ":material/refresh: Сбросить",
             disabled=not has_active_filters,
-            use_container_width=True,
+            width='stretch',
             on_click=clear_search_filters,
             key="main_search_reset_btn",
         )
@@ -892,14 +876,14 @@ def equipment_table_info(df_to_display: pd.DataFrame):
         with act_col1:
             if st.button(
                 ":material/add: Добавить",
-                use_container_width=True,
+                width='stretch',
                 key="panel_add_btn",
             ):
                 manual_add_modal(df_to_display)
         with act_col2:
             if st.button(
                 ":material/edit: Изменить",
-                use_container_width=True,
+                width='stretch',
                 key="panel_edit_btn",
             ):
                 st.session_state["show_update_success"] = False
@@ -912,7 +896,7 @@ def equipment_table_info(df_to_display: pd.DataFrame):
         with act_col3:
             if st.button(
                 ":material/delete_forever: Удалить",
-                use_container_width=True,
+                width='stretch',
                 key="panel_delete_btn",
             ):
                 st.session_state["m_del_q"] = ""
@@ -957,7 +941,7 @@ def equipment_table_info(df_to_display: pd.DataFrame):
     st.dataframe(
         display_df, 
         column_config=column_config, 
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height="content"
     )
@@ -994,7 +978,7 @@ def equipment_table_operational(df_to_display: pd.DataFrame):
     st.dataframe(
         display_df, 
         column_config=column_config, 
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height="content"
     )
@@ -1013,7 +997,7 @@ def import_export_tab():
         data=blank_eq_file,
         file_name="Шаблон_Список_техники.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True, 
+        width='stretch', 
         key="settings_download_eq_template_btn"
     )
     
@@ -1024,7 +1008,7 @@ def import_export_tab():
     # 2. КНОПКА-ПЕРЕКЛЮЧАТЕЛЬ ДЛЯ ИМПОРТА
     if st.button(
         label=":material/upload: Импортировать Список техники (.xlsx)", 
-        use_container_width=True,
+        width='stretch',
         key="settings_trigger_upload_btn"
     ):
         # Меняем состояние на противоположное при клике
@@ -1057,7 +1041,7 @@ def import_export_tab():
         data=exported_eq_file,
         file_name=f"Список_техники_{export_current_date}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+        width='stretch',
         key="settings_export_eq_btn",
     )
 
@@ -1074,7 +1058,7 @@ def settings_tab():
            
     with col2:
         if st.session_state.role == "admin":
-            if st.button("Завершить сеанс", type="primary", use_container_width=True):
+            if st.button("Завершить сеанс", type="primary", width='stretch'):
                 st.session_state.role = "guest"
                 st.rerun()
         else:

@@ -9,6 +9,7 @@ venv/
 env/
 ENV/
 .venv
+.env
 
 # Streamlit
 .streamlit/secrets.toml
