@@ -15,11 +15,11 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* Скрывает сайдбар */
+/* Скрывает сайдбар 
 [data-testid="stSidebar"], [data-testid="stSidebarCollapseButton"] {
     display: none !important;
 }
-
+*/
 
 /* ---Изменение названия программы---*/
 
@@ -222,4 +222,6 @@ div[data-baseweb="menu"] li[data-highlighted="true"] {
 /* Выравниваем высоту блока внутри, компенсируя разницу в толщине рамок (1px vs 0.5px) */
 [data-testid="stSelectbox"] div[data-baseweb="select"] {
     height: calc(100% + 1px) !important; 
-}   
+}
+
+

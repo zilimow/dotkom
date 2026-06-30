@@ -13,4 +13,5 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
     "streamlit>=1.57.0",
+    "streamlit-option-menu>=0.4.0",
 ]

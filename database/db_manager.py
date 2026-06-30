@@ -30,11 +30,13 @@ class DatabaseError(Exception):
 
 @contextmanager
 def get_connection_context():
-    """Context manager for database connections."""
+    """Context manager for database connections with enabled cascade deletion."""
     conn = None
     try:
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
         yield conn
         conn.commit()
     except sqlite3.Error as e:
@@ -47,6 +49,7 @@ def get_connection_context():
             conn.close()
 
 
+
 def init_db():
     """Initialize database with all required tables and indexes."""
     with get_connection_context() as conn:
@@ -54,8 +57,8 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS equipment (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                eq_board TEXT NOT NULL,
-                eq_type TEXT NOT NULL,
+                eq_board TEXT NOT NULL CHECK(trim(eq_board) != ''),
+                eq_type TEXT NOT NULL CHECK(trim(eq_type) != ''),
                 eq_model TEXT,
                 eq_serial TEXT,
                 eq_year TEXT,
@@ -63,19 +66,29 @@ def init_db():
                 eq_engine_number TEXT,
                 eq_code TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(eq_board, eq_model, eq_type)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_equipment_board ON equipment(eq_board)
+            CREATE TABLE IF NOT EXISTS work_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                equipment_id INTEGER NOT NULL,          -- Связь по системному ID
+                work_date DATE DEFAULT CURRENT_DATE,
+                work_task TEXT,
+                work_desc TEXT,
+                work_hours REAL,
+                time_start TEXT,
+                time_end TEXT,
+                work_executor TEXT,
+                work_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE CASCADE -- Ссылка на id
+            )
         """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_work_orders_eq_id ON work_orders(equipment_id)")
         
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_equipment_type ON equipment(eq_type)
-        """)
-        
+               
         logger.info("Database initialized successfully")
 
 
@@ -120,33 +133,131 @@ def delete_equipment(equipment_id):
         return cursor.rowcount > 0
 
 
-def get_unique_types():
-    """Return list of unique equipment types."""
-    with get_connection_context() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT eq_type FROM equipment WHERE eq_type IS NOT NULL AND eq_type != ''")
-        types = [row[0] for row in cursor.fetchall()]
-        
-        if not types:
-            types = ["Гусеничный экскаватор", "Самосвал", "Фронтальный погрузчик", "Автогрейдер"]
-        return types
-
-
 def get_equipment_statistics():
     """Get statistics about equipment fleet."""
     with get_connection_context() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM equipment")
-        total = cursor.fetchone()[0]
-        
-        cursor.execute("""
-            SELECT eq_type, COUNT(*) FROM equipment GROUP BY eq_type ORDER BY COUNT(*) DESC
-        """)
-        by_type = dict(cursor.fetchall())
-        
-        return {'total': total, 'by_type': by_type}
+        total = cursor.fetchone()[0]      
+        return {'total': total}
 
+def load_work_orders() -> pd.DataFrame:
+    """Загрузка полного журнала работ с автоматическим подтягиванием данных из паспорта техники."""
+    with get_connection_context() as conn:
+        query = """
+            SELECT 
+                w.work_date AS [eq_date],
+                e.eq_board AS [eq_board],       -- Борт подтягивается по ID связи
+                e.eq_type AS [eq_type],         -- Тип подтягивается по ID связи
+                e.eq_model AS [eq_model],       -- Модель подтягивается по ID связи
+                w.work_task AS [eq_task],
+                w.work_desc AS [eq_desc],
+                w.work_hours AS [eq_hours],
+                w.time_start AS [time_start],
+                w.time_end AS [time_end],
+                w.work_executor AS [eq_executor],
+                w.work_notes AS [eq_notes],
+                w.id AS [id]
+            FROM work_orders w
+            LEFT JOIN equipment e ON w.equipment_id = e.id
+            ORDER BY w.work_date DESC, w.id DESC
+        """
+        df = pd.read_sql_query(query, conn)
+        return df
 
+def add_work_order(
+    equipment_id: int,
+    work_date: str, 
+    work_task: str,
+    work_desc: str,
+    work_hours: float,
+    time_start: str,
+    time_end: str,
+    work_executor: str,
+    work_notes: str,
+):
+    """Добавление новой записи в журнал ТОиР с сохранением даты в текстовом формате ДД.ММ.ГГГГ."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO work_orders (
+                equipment_id, 
+                work_date, 
+                work_task, 
+                work_desc, 
+                work_hours, 
+                time_start, 
+                time_end, 
+                work_executor, 
+                work_notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                equipment_id,
+                work_date,  
+                work_task,
+                work_desc,
+                work_hours,
+                time_start,
+                time_end,
+                work_executor,
+                work_notes,
+            ),
+        )
+
+def update_work_order(
+    record_id: int,
+    work_date: str, 
+    work_task: str,
+    work_desc: str,
+    work_hours: float,
+    time_start: str,
+    time_end: str,
+    work_executor: str,
+    work_notes: str,
+):
+    """Обновление существующей записи в журнале ТОиР по ее системному id."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE work_orders 
+            SET 
+                work_date = ?, 
+                work_task = ?, 
+                work_desc = ?, 
+                work_hours = ?, 
+                time_start = ?, 
+                time_end = ?, 
+                work_executor = ?, 
+                work_notes = ?
+            WHERE id = ?
+        """,
+            (
+                work_date,  
+                work_task,
+                work_desc,
+                work_hours,
+                time_start,
+                time_end,
+                work_executor,
+                work_notes,
+                record_id, # Уникальный ID записи для условия WHERE
+            ),
+        )
+
+def delete_work_order(record_id: int):
+    """Удаление записи из журнала ТОиР по ее системному id."""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        # Принудительно преобразуем к int и передаем кортеж (record_id,)
+        cursor.execute(
+            "DELETE FROM work_orders WHERE id = ?;",
+            (int(record_id),)
+        )
+        
 def generate_equipment_blank_template() -> io.BytesIO:
     """Генерация чистого Excel-шаблона с красивой жирной шапкой и готовой шириной столбцов."""
     output = io.BytesIO()
@@ -208,7 +319,7 @@ def import_equipment_from_excel(uploaded_file) -> tuple[bool, str]:
         if df.empty:
             return False, "В файле нет валидных строк (пропущен Тип техники)."
 
-        # Очистка ячеек от грязи системных типов (.0, nan)
+        # Очистка ячеек от мусора системных типов (.0, nan)
         bn_counter = 1
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip()
@@ -371,7 +482,7 @@ def export_equipment_to_excel() -> io.BytesIO:
 
         # 2. Добавление 10 пустых строк для заполнения от руки
         start_empty_row = worksheet.max_row + 1
-        for row_idx in range(start_empty_row, start_empty_row + 10):
+        for row_idx in range(start_empty_row, start_empty_row + 60):
             # Большая высота строки, чтобы было удобно писать ручкой
             worksheet.row_dimensions[row_idx].height = 24
 
