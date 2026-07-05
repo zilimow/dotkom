@@ -12,3 +12,8 @@ secondaryBackgroundColor = "#F8F9FA"
 textColor = "#1B232A"
 
 font = "sans serif"
+
+[client]
+# Полностью отключаем показ системного меню и кнопки Deploy на уровне ядра
+showErrorDetails = false
+toolbarMode = "minimal"

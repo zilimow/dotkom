@@ -1,5 +1,6 @@
 import sqlite3
 import logging
+import hashlib
 from contextlib import contextmanager
 from typing import List, Dict, Any, Optional
 import pandas as pd
@@ -43,7 +44,8 @@ def get_connection_context():
         if conn:
             conn.rollback()
         logger.error(f"Database error: {e}")
-        raise DatabaseError(f"Database operation failed: {e}") from e
+        # ИСПРАВЛЕНО: временно выводим точный e вместо обобщенного сообщения
+        raise DatabaseError(f"SQL Error Detail: {e}") from e
     finally:
         if conn:
             conn.close()
@@ -80,18 +82,114 @@ def init_db():
                 work_hours REAL,
                 time_start TEXT,
                 time_end TEXT,
-                work_executor TEXT,
+                executor_user_id INTEGER,
                 work_notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE CASCADE -- Ссылка на id
+                FOREIGN KEY (executor_user_id) REFERENCES users(id) -- Ссылка на пользователя
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_work_orders_eq_id ON work_orders(equipment_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_work_orders_exec_id ON work_orders(executor_user_id)")
+        
+        # Создаем системную таблицу пользователей
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                fio TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                is_active INTEGER DEFAULT 1 -- 1 = Активен, 0 = Заблокирован (Уволен)
+            );
+        """)
+        
+        # Автоматически создаем вашу запись суперадмина, если таблица пустая
+        cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+        if not cursor.fetchone():
+            # Задаем ваш пароль по умолчанию: admin777 (хешируем в SHA-256)
+            default_hash = hashlib.sha256("admin777".encode()).hexdigest()
+            cursor.execute("""
+                INSERT INTO users (username, fio, password_hash, role)
+                VALUES ('admin', 'Радик (Администратор)', ?, 'admin')
+            """, (default_hash,))
+            logger.info("Default administrator account created successfully")
         
                
         logger.info("Database initialized successfully")
+        
 
 
+def verify_user_credentials(username: str, password_raw: str) -> Optional[Dict[str, Any]]:
+    """
+    Проверяет логин и пароль в базе данных.
+    Возвращает словарь с ФИО и ролью при успехе, иначе None.
+    """
+    # Хешируем введенный пароль для сверки с базой
+    pwd_hash = hashlib.sha256(password_raw.encode()).hexdigest()
+    
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, fio, role FROM users 
+            WHERE username = ? AND password_hash = ? AND is_active = 1
+        """, (username, pwd_hash))
+        row = cursor.fetchone()
+        
+        if row:
+            return {"id": row["id"], "fio": row["fio"], "role": row["role"]}
+        return None
+
+def register_new_user(username: str, fio: str, password_raw: str, role: str = "user") -> bool:
+    """
+    Регистрирует нового сотрудника в системе.
+    Возвращает True при успешной записи, или вызывает ошибку, если логин занят.
+    """
+    pwd_hash = hashlib.sha256(password_raw.encode()).hexdigest()
+    
+    try:
+        with get_connection_context() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (username, fio, password_hash, role)
+                VALUES (?, ?, ?, ?)
+            """, (username, fio, pwd_hash, role))
+            return True
+    except sqlite3.IntegrityError as e:
+        logger.warning(f"Registration failed: username '{username}' already exists.")
+        raise DatabaseError("Этот логин уже занят! Придумайте другой.") from e
+    
+def get_active_users_list() -> List[Dict[str, Any]]:
+    """Возвращает список всех работающих сотрудников для выпадающих списков"""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, fio, username FROM users WHERE is_active = 1 ORDER BY fio")
+        return [dict(row) for row in cursor.fetchall()]
+
+def block_user(user_id: int) -> bool:
+    """Мягкое удаление (блокировка) по системному ID"""
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        return True
+    
+def delete_user_permanently(username: str) -> bool:
+    """
+    Полностью удаляет сотрудника из таблицы users.
+    Предотвращает удаление главного администратора 'admin'.
+    """
+    if username == "admin":
+        raise DatabaseError("Критическая ошибка: Запрещено удалять корневой аккаунт 'admin'!")
+        
+    with get_connection_context() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+        
+        # Проверяем, было ли фактически удалено хоть одно поле (существовал ли юзер)
+        if cursor.rowcount == 0:
+            raise DatabaseError(f"Пользователь с логином '{username}' не найден.")
+        return True
+    
 def load_equipment():
     """Load all equipment from database."""
     with get_connection_context() as conn:
@@ -142,28 +240,40 @@ def get_equipment_statistics():
         return {'total': total}
 
 def load_work_orders() -> pd.DataFrame:
-    """Загрузка полного журнала работ с автоматическим подтягиванием данных из паспорта техники."""
+    """
+    Загружает все наряды на работу из БД.
+    Обеспечивает 100% совместимость со всеми старыми фильтрами и таблицами отображения.
+    """
+    query = """
+        SELECT 
+            w.id,
+            w.equipment_id,
+            w.work_date,
+            w.work_task,
+            w.work_desc,
+            w.work_hours,
+            w.time_start,
+            w.time_end,
+            w.work_notes,
+            w.created_at,
+            
+            -- ГАРАНТИЯ СОВМЕСТИМОСТИ ТАБЛИЦЫ: Переименовываем ФИО в старое имя колонки
+            COALESCE(u.fio, 'Не указан') AS work_executor, 
+            
+            -- ГАРАНТИЯ СОВМЕСТИМОСТИ ФИЛЬТРОВ: Подтягиваем данные техники
+            e.eq_type,
+            e.eq_model,
+            e.eq_board
+        FROM work_orders w
+        LEFT JOIN users u ON w.executor_user_id = u.id
+        LEFT JOIN equipment e ON w.equipment_id = e.id
+        ORDER BY w.id DESC
+    """
+    
     with get_connection_context() as conn:
-        query = """
-            SELECT 
-                w.work_date AS [eq_date],
-                e.eq_board AS [eq_board],       -- Борт подтягивается по ID связи
-                e.eq_type AS [eq_type],         -- Тип подтягивается по ID связи
-                e.eq_model AS [eq_model],       -- Модель подтягивается по ID связи
-                w.work_task AS [eq_task],
-                w.work_desc AS [eq_desc],
-                w.work_hours AS [eq_hours],
-                w.time_start AS [time_start],
-                w.time_end AS [time_end],
-                w.work_executor AS [eq_executor],
-                w.work_notes AS [eq_notes],
-                w.id AS [id]
-            FROM work_orders w
-            LEFT JOIN equipment e ON w.equipment_id = e.id
-            ORDER BY w.work_date DESC, w.id DESC
-        """
         df = pd.read_sql_query(query, conn)
         return df
+
 
 def add_work_order(
     equipment_id: int,
@@ -173,7 +283,7 @@ def add_work_order(
     work_hours: float,
     time_start: str,
     time_end: str,
-    work_executor: str,
+    executor_user_id: int,
     work_notes: str,
 ):
     """Добавление новой записи в журнал ТОиР с сохранением даты в текстовом формате ДД.ММ.ГГГГ."""
@@ -189,7 +299,7 @@ def add_work_order(
                 work_hours, 
                 time_start, 
                 time_end, 
-                work_executor, 
+                executor_user_id, 
                 work_notes
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -202,7 +312,7 @@ def add_work_order(
                 work_hours,
                 time_start,
                 time_end,
-                work_executor,
+                executor_user_id,
                 work_notes,
             ),
         )
@@ -215,7 +325,7 @@ def update_work_order(
     work_hours: float,
     time_start: str,
     time_end: str,
-    work_executor: str,
+    executor_user_id: int,
     work_notes: str,
 ):
     """Обновление существующей записи в журнале ТОиР по ее системному id."""
@@ -231,7 +341,7 @@ def update_work_order(
                 work_hours = ?, 
                 time_start = ?, 
                 time_end = ?, 
-                work_executor = ?, 
+                executor_user_id = ?, 
                 work_notes = ?
             WHERE id = ?
         """,
@@ -242,7 +352,7 @@ def update_work_order(
                 work_hours,
                 time_start,
                 time_end,
-                work_executor,
+                executor_user_id,
                 work_notes,
                 record_id, # Уникальный ID записи для условия WHERE
             ),

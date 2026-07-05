@@ -10,6 +10,7 @@ import threading
 import datetime
 import requests
 import logging
+import hashlib
 import time
 import os
 import io
@@ -49,10 +50,11 @@ def load_external_css(file_path: str):
         st.warning(f"CSS file not found at: {file_path}")
 
 
-        
-def app_header():
-    """Отображение шапки приложения с шестеренкой."""
-    gear_class = "icon-admin" if st.session_state.get("role") == "admin" else "icon-guest"
+
+def info_panel():
+    # 1. Сбор данных для инфо-строки
+    current_user_fio = st.session_state.get("user_fio", "Каекбердин Р.Р.")  
+    current_role_str = "Администратор" if st.session_state.get("role") == "admin" else "Механик"
     
     months_ru = {
         1: "января", 2: "февраля", 3: "марта", 4: "апреля",
@@ -69,19 +71,89 @@ def app_header():
     except Exception:
         total_equipment = 0
 
-    # Создание информационной строки под логотипом
-    divider = "|"
-    base_meta = (
-        f":material/calendar_month: {current_date}"
-        f"&emsp;{divider}&emsp;"
-        f":material/schedule: {current_time}"
-        f"&emsp;{divider}&emsp;"
-        f":green[:material/database:] Соединение установлено "
-        f"&emsp;{divider}&emsp;"
-        f":yellow[:material/front_loader:] Всего техники: **{total_equipment}**"
+    base_meta_html = (
+        f"📅 {current_date}"
+        f" &nbsp;|&nbsp; "
+        f"🕒 {current_time}"
+        f" &nbsp;|&nbsp; "
+        f"🚜 Всего техники: <b>{total_equipment}</b>"
     )
-    st.caption(base_meta, unsafe_allow_html=True)
+
+    # 2. Чистая стилизация (Никаких скрытых кнопок)
+    st.html(
+        """
+        <style>
+            .system-fixed-top-bar {
+                position: fixed !important;
+                left: 5rem !important; 
+                width: calc(100% - 10rem) !important;
+                top: 0 !important;
+                background-color: #FFFFFF !important; 
+                border-bottom: 1px solid #CCCCCC !important;
+                padding-top: 6px !important;       
+                padding-bottom: 6px !important;       
+                padding-left: 0px !important;  
+                padding-right: 0px !important; 
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                z-index: 99999 !important;          
+                box-sizing: border-box !important;
+            }
+            .top-bar-text {
+                font-size: 11px !important;
+                color: #555555 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                font-family: monospace !important;
+            }
+            .stMainBlockContainer { padding-top: 5px !important; }
+            [data-testid="stHeader"] { display: none !important; height: 0px !important; visibility: hidden !important; }
+            #MainMenu { visibility: hidden !important; }
+            
+            .top-bar-btn {
+                background-color: #140A9A !important; color: #FFFFFF !important;
+                border: 1px solid #140A9A !important; padding: 3px 8px !important;
+                font-size: 10px !important; font-family: sans-serif;
+                border-radius: 4px !important; cursor: pointer;
+                text-decoration: none !important; display: inline-block;
+                margin-left: 10px; transition: all 0.2s ease;
+            }
+            .top-bar-btn:hover { background-color: #2e7d32 !important; border-color: #2e7d32 !important; }
+        </style>
+        """
+    )
+
+    # 3. ОТРИСОВКА ВЕРХНЕЙ СТРОКИ
+    # ИСПРАВЛЕНО: Ссылка Выйти ведет на ?logout=1 и открывается строго в ТЕКУЩЕЙ вкладке (target="_self")
+    st.markdown(
+        f"""
+        <div class="system-fixed-top-bar">
+            <div>
+                <p class="top-bar-text">
+                    {base_meta_html}
+                </p>
+            </div>
+            <div>
+                <p class="top-bar-text">
+                    Пользователь: <b>{current_user_fio}</b> ({current_role_str})
+                    <a href="?logout=1" target="_self" class="top-bar-btn">Выйти</a>
+                </p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+
+
+        
+def app_header():
+    """Отображение шапки приложения с шестеренкой."""
+    gear_class = "icon-admin" if st.session_state.get("role") == "admin" else "icon-guest"
     
+        
     # Отрисовка названия с подчеркивающей линией
     st.markdown(f"""
         <style>
@@ -113,7 +185,9 @@ def app_header():
         </div>
     """, unsafe_allow_html=True)
     
-
+def app_footer():
+    """Отрисовка текстового блока футера (все стили подгружаются из style.css)."""
+    st.markdown('<p class="pure-clean-footer">© 2026 Radik · All rights reserved</p>', unsafe_allow_html=True)
 
 def reset_update_modal_filters():
     """Сброс фильтров поиска внутри модального окна редактирования."""
@@ -950,62 +1024,7 @@ def equipment_table(df_to_display: pd.DataFrame):
 def work_table(df_initial: pd.DataFrame, df_to_display: pd.DataFrame):
     """Вывод кнопок управления и интерактивной таблицы журнала работ."""
     
-    # Выделяем выбранную пользователем строку из состояния таблицы
-    selected_row_index = None
-    if "w_table_selection" in st.session_state:
-        selected_rows = st.session_state["w_table_selection"].get("selection", {}).get("rows", [])
-        if selected_rows:
-            selected_row_index = selected_rows[0] # Берем первую выбранную строку
-            
-    act_col1, act_col2, act_col3, act_col4 = st.columns(4)
-    
-    with act_col1:
-        # Кнопка просмотра активна для ЛЮБОГО пользователя, если выбрана строка
-        btn_view = st.button(":material/insert_drive_file: Открыть задание", use_container_width=True, key="w_view_action_btn", disabled=selected_row_index is None)
-        if btn_view and selected_row_index is not None:
-            row_data = df_to_display.iloc[selected_row_index]
-            open_view_modal(row_data) # Вызов окна просмотра
-
-                   
-        # Ограничиваем остальные кнопки ролью администратора
-    if st.session_state.get("role") == "admin":
-        with act_col2:
-            # ИСПРАВЛЕНО: Убран on_click и st.rerun(), диалог вызывается напрямую внутри тела кнопки
-            if st.button("➕ Добавить", use_container_width=True, key="w_add_action_btn"):
-                # 1. Принудительно очищаем кэш полей ввода перед открытием формы
-                clear_add_workflow_cache() 
-                
-                # 2. Подгружаем актуальный список техники из базы данных
-                df_equipment_raw = db.load_equipment()
-                
-                # 3. Мгновенно открываем модальное окно добавления
-                manual_add_work_modal(df_equipment_raw)
-        with act_col3:
-            btn_edit = st.button("✏️ Изменить", use_container_width=True, key="w_edit_action_btn", disabled=selected_row_index is None)
-            if btn_edit and selected_row_index is not None:
-                row_data = df_to_display.iloc[selected_row_index]
-                open_edit_modal(row_data)
-        with act_col4:
-            btn_del = st.button("🗑️ Удалить", use_container_width=True, key="w_del_action_btn", disabled=selected_row_index is None)
-            if btn_del and selected_row_index is not None:
-                row_data = df_to_display.iloc[selected_row_index]
-                open_delete_modal(
-                    record_id=row_data.get("id"),
-                    eq_date=row_data.get("eq_date"),
-                    eq_board=row_data.get("eq_board"),
-                    eq_task=row_data.get("eq_task"),
-                    eq_executor=row_data.get("eq_executor")
-                )
-    else:
-        # Если зашел не админ, пустые три колонки справа заполняем заглушкой, чтобы интерфейс не съезжал
-        with act_col2: st.write("")
-        with act_col3: st.write("")
-        with act_col4: st.write("")
-        
-    st.write(" ")
-                
-
-    # Конфигурация отображения колонок
+    # 1. СНАЧАЛА ОБЪЯВЛЯЕМ КОНФИГУРАЦИЮ ОТОБРАЖЕНИЯ КОЛОНОК
     column_config = {
         "eq_date": st.column_config.TextColumn("Дата", width=95),
         "eq_board": st.column_config.TextColumn("Бортовой номер", width=95),
@@ -1025,25 +1044,88 @@ def work_table(df_initial: pd.DataFrame, df_to_display: pd.DataFrame):
         "eq_desc", "eq_hours", "time_start", "time_end", "eq_executor", "eq_notes"
     ]
 
+    # 2. ФОРМИРУЕМ ДАТАФРЕЙМ ДЛЯ ВЫВОДА (С ПЕРЕИМЕНОВАНИЕМ)
     if df_to_display.empty:
         display_df = pd.DataFrame(columns=display_cols)
         selection_mode = []
     else:
-        display_df = df_to_display[display_cols].copy()
-        selection_mode = "single-row" # Разрешаем выбирать строго одну строку для Изменения/Удаления
+        rename_map = {
+            "work_date": "eq_date",
+            "work_task": "eq_task",
+            "work_desc": "eq_desc",
+            "work_hours": "eq_hours",
+            "work_executor": "eq_executor",
+            "work_notes": "eq_notes"
+        }
+        working_df = df_to_display.copy()
+        working_df.rename(columns=rename_map, inplace=True)
+        valid_cols = [col for col in display_cols if col in working_df.columns]
+        
+        # Гарантируем, что системный id записи НЕ потеряется при фильтрации и долетит до модалок
+        if "id" in working_df.columns and "id" not in valid_cols:
+            valid_cols.append("id")
+            
+        display_df = working_df[valid_cols].copy()
+        selection_mode = "single-row"
 
-    # Отрисовка таблицы
+    # 3. БЕЗОПАСНО ИЗВЛЕКАЕМ ИНДЕКС СТРОКИ КАК ЧИСЛО (Через)
+    selected_row_index = None
+    if "w_table_selection" in st.session_state:
+        selected_rows = st.session_state["w_table_selection"].get("selection", {}).get("rows", [])
+        if selected_rows:
+            # Извлекаем первый элемент списка, преобразуя его в чистое целое число int
+            selected_row_index = int(selected_rows[0]) 
+
+    # 4. РЕНДЕРИНГ КНОПОК УПРАВЛЕНИЯ
+    act_col1, act_col2, act_col3, act_col4 = st.columns(4)
     
+    with act_col1:
+        btn_view = st.button(":material/insert_drive_file: Открыть задание", use_container_width=True, key="w_view_action_btn", disabled=selected_row_index is None)
+        if btn_view and selected_row_index is not None:
+            row_data = display_df.iloc[selected_row_index]
+            open_view_modal(row_data)
+
+    if st.session_state.get("role") == "admin":
+        with act_col2:
+            if st.button("➕ Добавить", use_container_width=True, key="w_add_action_btn"):
+                clear_add_workflow_cache() 
+                df_equipment_raw = db.load_equipment()
+                manual_add_work_modal(df_equipment_raw)
+        with act_col3:
+            btn_edit = st.button("✏️ Изменить", use_container_width=True, key="w_edit_action_btn", disabled=selected_row_index is None)
+            if btn_edit and selected_row_index is not None:
+                # Извлекаем готовую отформатированную строку Pandas Series
+                row_data = display_df.iloc[selected_row_index]
+                open_edit_modal(row_data)
+        with act_col4:
+            btn_del = st.button("🗑️ Удалить", use_container_width=True, key="w_del_action_btn", disabled=selected_row_index is None)
+            if btn_del and selected_row_index is not None:
+                row_data = display_df.iloc[selected_row_index]
+                open_delete_modal(
+                    record_id=row_data.get("id"),
+                    eq_date=row_data.get("eq_date"),
+                    eq_board=row_data.get("eq_board"),
+                    eq_task=row_data.get("eq_task"),
+                    eq_executor=row_data.get("eq_executor")
+                )
+    else:
+        with act_col2: st.write("")
+        with act_col3: st.write("")
+        with act_col4: st.write("")
+        
+    st.write(" ")
+    
+    # 5. ОТРИСОВКА ИНТЕРАКТИВНОЙ ТАБЛИЦЫ
     st.caption("Список работ")
     st.dataframe(
         display_df,
-        column_config=column_config,
+        column_config=column_config, # Теперь переменная гарантированно объявлена выше!
         width='stretch',
         hide_index=True,
         height="content",
-        on_select="rerun", # Включаем интерактивный выбор строк
+        on_select="rerun", 
         selection_mode=selection_mode,
-        key="w_table_selection" # Состояние выбора пишется сюда
+        key="w_table_selection" 
     )
 
 
@@ -1207,6 +1289,18 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
     db_serial = target_row.iloc[0].get("eq_serial", "")
     if db_serial and not pd.isna(db_serial):
         st.caption(f"🔧 Серийный номер выбранной машины: **{db_serial}**")
+        
+    active_employees = db.get_active_users_list()
+    
+    employee_ids = [emp["id"] for emp in active_employees]
+    employee_fios = [emp["fio"] for emp in active_employees]
+    
+    # Автоподстановка: вычисляем индекс текущего залогиненного пользователя
+    current_uid = st.session_state.get("user_id", None)
+    try:
+        default_executor_idx = employee_ids.index(current_uid)
+    except ValueError:
+        default_executor_idx = 0  # Если совпадений нет, выберем первого сотрудника в списке
 
     # РЯД 2: ФОРМА ВВОДА ДАННЫХ
     with st.form("modal_add_work_form_new_id", clear_on_submit=False):
@@ -1224,7 +1318,12 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
         with c5:
             work_task = st.text_input("Задание (плановое ТО, регламент)", placeholder="Например: ТО 4000", key="w_add_modal_task").strip()
         with c6:
-            work_executor = st.text_input("Исполнитель (ФИО) *", placeholder="Например: Каекбердин", key="w_add_modal_executor").strip()
+            selected_executor_fio = st.selectbox(
+                "Исполнитель (ФИО) *", 
+                options=employee_fios, 
+                index=default_executor_idx,
+                key="w_add_modal_executor_select"
+            )
 
         work_desc = st.text_area("Описание выполненных работ *", placeholder="Что конкретно было сделано...", height=80, key="w_add_modal_desc").strip()
         work_notes = st.text_area("Примечание (технические замеры, нюансы)", placeholder="Например: закачали 7 МПа...", height=80, key="w_add_modal_notes").strip()
@@ -1234,7 +1333,7 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
         submitted = st.form_submit_button("Сохранить запись в журнал", use_container_width=True)
 
         if submitted:
-            if not work_executor or not work_desc:
+            if not work_desc:
                 form_status.error("❌ Поля Исполнитель и Описание работ обязательны для заполнения!")
             elif t_start == t_end:
                 form_status.error("❌ Ошибка времени: Время начала и окончания смены не могут совпадать!")
@@ -1250,6 +1349,8 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
                     try:
                         # ВЫЧИСЛЯЕМ СИСТЕМНЫЙ ID ПРЯМО ЗДЕСЬ (Утечка через session_state полностью исключена!)
                         active_equipment_id = int(target_row.iloc[0]["id"])
+                        
+                        chosen_executor_id = employee_ids[employee_fios.index(selected_executor_fio)]
 
                         str_start = t_start.strftime("%H:%M")
                         str_end = t_end.strftime("%H:%M")
@@ -1263,7 +1364,7 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
                             work_hours=float(work_hours),
                             time_start=str_start,
                             time_end=str_end,
-                            work_executor=work_executor,
+                            executor_user_id=chosen_executor_id, # Пишем ID в таблицу базы данных
                             work_notes=work_notes,
                         )
 
@@ -1281,19 +1382,35 @@ def manual_add_work_modal(df_equipment: pd.DataFrame):
 
 @st.dialog(":material/edit: Изменить запись", width="large")
 def open_edit_modal(row_data: pd.Series):
-    """Модальное окно для редактирования существующей записи журнала работ."""
+    """Модальное окно для редактирования существующей записи журнала работ с выбором исполнителя по ID."""
     st.write(f"📝 Редактирование записи для машины с бортовым номером: **{row_data.get('eq_board')}**")
     
+    # --- СТРАТЕГИЯ: ПОДГОТОВКА СПИСКА ИСПОЛНИТЕЛЕЙ ---
+    active_employees = db.get_active_users_list()
+    
+    if not active_employees:
+        st.error("❌ Ошибка: В системе нет зарегистрированных сотрудников! Редактирование невозможно.")
+        return
+        
+    employee_ids = [emp["id"] for emp in active_employees]
+    employee_fios = [emp["fio"] for emp in active_employees]
+    
+    # Вычисляем текущего исполнителя наряда для фокуса селектбокса
+    current_executor_fio = str(row_data.get("eq_executor", "")).strip()
+    try:
+        # Пытаемся найти индекс текущего ФИО в списке сотрудников
+        default_executor_idx = employee_fios.index(current_executor_fio)
+    except ValueError:
+        default_executor_idx = 0  # Если сотрудник уволен/не найден, берем первого в списке
+
     # Форма с предзаполненными данными из row_data
     with st.form("modal_edit_work_form"):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            # Преобразуем строку даты обратно в объект date для календаря
             try:
                 current_date = datetime.datetime.strptime(row_data.get("eq_date", ""), "%d.%m.%Y").date()
             except Exception:
                 try:
-                    # На случай, если в БД дата лежит в ISO формате (ГГГГ-ММ-ДД)
                     current_date = datetime.datetime.strptime(row_data.get("eq_date", ""), "%Y-%m-%d").date()
                 except Exception:
                     current_date = datetime.date.today()
@@ -1318,7 +1435,13 @@ def open_edit_modal(row_data: pd.Series):
         with c5:
             work_task = st.text_input("Задание", value=str(row_data.get("eq_task", ""))).strip()
         with c6:
-            work_executor = st.text_input("Исполнитель (ФИО) *", value=str(row_data.get("eq_executor", ""))).strip()
+            # ИСПРАВЛЕНО: Текстовое поле заменено на выпадающий список сотрудников
+            selected_executor_fio = st.selectbox(
+                "Исполнитель (ФИО) *", 
+                options=employee_fios, 
+                index=default_executor_idx,
+                key="w_edit_modal_executor_select"
+            )
 
         work_desc = st.text_area("Описание выполненных работ *", value=str(row_data.get("eq_desc", "")), height=80).strip()
         work_notes = st.text_area("Примечание", value=str(row_data.get("eq_notes", "")), height=80).strip()
@@ -1329,21 +1452,23 @@ def open_edit_modal(row_data: pd.Series):
         submitted = st.form_submit_button("Сохранить изменения", use_container_width=True)
 
         if submitted:
-            if not work_executor or not work_desc:
-                form_status.error("❌ Поля Исполнитель и Описание работ обязательны!")
+            # ИСПРАВЛЕНО: Валидация на пустоту строки исполнителя убрана, так как selectbox всегда заполнен
+            if not work_desc:
+                form_status.error("❌ Поле Описание работ обязательно!")
             elif t_start == t_end:
                 form_status.error("❌ Время начала и окончания не могут совпадать!")
             else:
                 try:
-                    # Собираем данные для отправки в БД
                     str_start = t_start.strftime("%H:%M")
                     str_end = t_end.strftime("%H:%M")
                     str_date = work_date.strftime("%d.%m.%Y")
                     
-                    # ИСПРАВЛЕНО: Извлекаем системный ID самой записи журнала работ напрямую из переданной строки таблицы
                     record_id = int(row_data.get("id"))
+                    
+                    # ИСПРАВЛЕНО: Определяем числовой ID выбранного в селектбоксе исполнителя прямо перед записью в БД
+                    chosen_executor_id = employee_ids[employee_fios.index(selected_executor_fio)]
 
-                    # Вызываем вашу функцию обновления в бэкенде
+                    # Вызываем функцию обновления в бэкенде (передаем ID вместо текста)
                     db.update_work_order(
                         record_id=record_id,
                         work_date=str_date,
@@ -1352,11 +1477,11 @@ def open_edit_modal(row_data: pd.Series):
                         work_hours=float(work_hours),
                         time_start=str_start,
                         time_end=str_end,
-                        work_executor=work_executor,
+                        executor_user_id=chosen_executor_id, # Передаем числовую переменную связи
                         work_notes=work_notes,
                     )
 
-                    form_status.success("✅ Изменения успешно сохранены!")
+                    st.success("✅ Изменения успешно сохранены!")
                     if "w_table_selection" in st.session_state:
                         st.session_state["w_table_selection"] = {"selection": {"rows": [], "columns": []}}
                     time.sleep(1.0)
@@ -1379,7 +1504,7 @@ def open_delete_modal(record_id: int, eq_date: str, eq_board: str, eq_task: str,
                 # Очищаем ID от возможных преобразований Pandas (float/object)
                 clean_id = int(float(str(record_id)))
                 
-                # Вызываем функцию из бэкенда
+                # Вызываем функцию из бэкенда (работает по первичному ключу наряда)
                 db.delete_work_order(clean_id)
                 
                 st.success("✅ Запись успешно удалена!")
@@ -1403,14 +1528,19 @@ def open_view_modal(row_data: pd.Series):
     """Модальное окно для детального просмотра параметров выбранной работы."""
     
     # Заголовок с основной информацией о машине
-    
     st.subheader(f"{row_data.get('eq_type')} {row_data.get('eq_model')} №{row_data.get('eq_board')} | Дата выполнения: **{row_data.get('eq_date')}**")
     st.divider()
     
     # Ряд 1: Временные и эксплуатационные показатели
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric(label="Наработка (моточасы)", value=f"{int(row_data.get('eq_hours', 0))} м/ч")
+        # ИСПРАВЛЕНО: Безопасное отображение моточасов (работает и с int, и с float типами данных)
+        try:
+            hours_val = f"{float(row_data.get('eq_hours', 0)):.1f}".replace(".0", "")
+        except Exception:
+            hours_val = str(row_data.get('eq_hours', 0))
+        st.metric(label="Наработка (моточасы)", value=f"{hours_val} м/ч")
+        
     with c2:
         st.metric(label="Время начала смены", value=str(row_data.get("time_start", "—")))
     with c3:
@@ -1434,7 +1564,6 @@ def open_view_modal(row_data: pd.Series):
         if "w_table_selection" in st.session_state:
             st.session_state["w_table_selection"] = {"selection": {"rows": [], "columns": []}}
         st.rerun()
-
 
 
 def filter_work_data(df_works: pd.DataFrame, filters: dict) -> pd.DataFrame:
@@ -1528,8 +1657,119 @@ def export_excel_data():
         key="settings_export_eq_btn",
     )
 
-# --- ГЛАВНЫЕ ВКЛАДКИ ---
+def auth_page():    
+    # ==============================================================================
+    # ИЗОЛИРОВАННЫЙ БЛОК: ВХОД И РЕГИСТРАЦИЯ
+    # ==============================================================================
+    if not st.session_state.get("auth_logged_in", False):
+        st.html("""
+            <style>
+                /* Намертво вырезаем верхнюю панель Streamlit до её отрисовки, убирая прыжки */
+                [data-testid="stHeader"] {
+                    display: none !important;
+                    height: 0px !important;
+                    visibility: hidden !important;
+                }
+                /* Скрываем служебное меню настроек (три точки) */
+                #MainMenu {
+                    visibility: hidden !important;
+                }
+                .stMainBlockContainer { 
+                    max-width: 420px !important; 
+                    padding-top: 10% !important; 
+                }
+            </style>
+        """)
+        
+        with st.container(border=True):
+            st.markdown("<h2 style='text-align: center; color: #140A9A; margin-bottom: 0;'>MECHANIK</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: gray; font-size: 13px;'>Система оперативного учета ТОиР</p>", unsafe_allow_html=True)
+            st.write(" ")
+            
+            # --- Контроль состояния радио-кнопки ---
+            if "auth_mode" not in st.session_state:
+                st.session_state["auth_mode"] = "Вход в систему"
 
+            # Callback-функция для синхронизации при ручном клике пользователя
+            def on_auth_mode_change():
+                st.session_state["auth_mode"] = st.session_state["auth_mode_selector_widget"]
+
+            options = ["Вход в систему", "Регистрация"]
+            current_index = options.index(st.session_state["auth_mode"])
+
+            # Сохраняем строго в auth_mode, чтобы избежать конфликта имен
+            auth_mode = st.radio(
+                "Выберите действие:",
+                options=options,
+                index=current_index,
+                key="auth_mode_selector_widget",
+                on_change=on_auth_mode_change
+            )
+            st.divider()
+            
+            # --- РЕЖИМ 1: ВХОД В СИСТЕМУ ---
+            if auth_mode == "Вход в систему":
+                default_login = st.session_state.get("last_registered_user", "")
+                
+                # Передаем сохраненный логин в value
+                login_user = st.text_input("Логин", value=default_login, key="login_username_field").strip()
+                login_pwd = st.text_input("Пароль", type="password", key="login_password_field")
+                st.write(" ")
+                
+                if st.button("Войти в программу", type="primary", use_container_width=True):
+                    if not login_user or not login_pwd:
+                        st.error("🔒 Заполните все поля для входа!")
+                    else:
+                        user_data = db.verify_user_credentials(login_user, login_pwd)
+                        if user_data:
+                            st.session_state["auth_logged_in"] = True
+                            st.session_state["user_fio"] = user_data["fio"]
+                            st.session_state["role"] = user_data["role"]
+                            st.session_state["user_id"] = user_data.get("id") 
+                            
+                            st.toast(f"🎉 Добро пожаловать, {user_data['fio']}!")
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("❌ Неверный логин или пароль!")
+            
+            # --- РЕЖИМ 2: РЕГИСТРАЦИЯ НОВОГО СОТРУДНИКА ---
+            else:
+                reg_fio = st.text_input("ФИО сотрудника", placeholder="Иванов И. И.", key="reg_fio_field").strip()
+                reg_user = st.text_input("Желаемый логин", placeholder="ivanov99", key="reg_user_field").strip()
+                reg_pwd = st.text_input("Придумайте пароль", type="password", key="reg_pwd_field")
+                st.write(" ")
+                
+                if st.button("Зарегистрировать аккаунт", type="primary", use_container_width=True):
+                    if not reg_fio or not reg_user or not reg_pwd:
+                        st.error("⚠️ Пожалуйста, заполните все поля формы!")
+                    elif len(reg_pwd) < 4:
+                        st.error("⚠️ Пароль должен быть не менее 4 символов!")
+                    else:
+                        try:
+                            # Записываем нового пользователя в базу данных
+                            db.register_new_user(reg_user, reg_fio, reg_pwd, role="user")
+                            
+                            st.success(f"🎉 Пользователь {reg_user} успешно зарегистрирован!")
+                            
+                            # 1. Запоминаем логин для автозаполнения
+                            st.session_state["last_registered_user"] = reg_user
+                            
+                            # 2. МЕНЯЕМ РЕЖИМ: Переводим текстовый статус во "Вход в систему"
+                            st.session_state["auth_mode"] = "Вход в систему"
+                            
+                            # 3. Полностью вырезаем кэш виджета, чтобы он принудительно перестроился по новому auth_mode
+                            st.session_state.pop("auth_mode_selector_widget", None)
+                            
+                            time.sleep(1.5)
+                            st.rerun()
+                            
+                        except db.DatabaseError as e:
+                            st.error(f"❌ {e}")
+        
+        st.stop()
+
+# --- ГЛАВНЫЕ ВКЛАДКИ ---
 def equipment_tab():
     """Функция вкладки Техника"""
     # Загружаем сырые данные из базы данных 
@@ -1563,60 +1803,253 @@ def works_tab():
     
 def tools_tab():
     """Функция вкладки Инструменты"""
-    st.info("Раздел в разработке")
-
+    pass
+    
 
 def docs_tab():
     """Функция вкладки Документы"""
-    st.info("Раздел в разработке")
-    
+    # 1. Разделяем рабочую область вашей вкладки на две колонки
+    # Левая колонка для меню (умеренно узкая), правая — для форм ввода
+    st.write("")
+    col_menu, col_content = st.columns([1.2, 3.5], gap="medium")
+
+    with col_menu:
+        
+        
+        # 2. Инициализируем литое вертикальное option_menu
+        selected_subtab = option_menu(
+            menu_title=None,       # Скрываем общий заголовок виджета
+            options=["Профиль компании", "Финаzнсы и Налоги", "Склад и Логистика"],
+            icons=["building", "wallet2", "box-seam"], # Названия иконок Bootstrap
+            menu_icon="cast", 
+            default_index=0,       # Индекс вкладки, открытой по умолчанию
+            orientation="vertical", # Принудительный вертикальный режим
+            styles={
+                "container": {
+                    "padding": "0px !important", 
+                    "background-color": "#ffffff",
+                    "border": "1px solid #E0E0E0",
+                    "border-radius": "8px"
+                },
+                "icon": {
+                    "color": "#666666", 
+                    "font-size": "16px"
+                }, 
+                "nav-link": {
+                    "font-size": "15px", 
+                    "text-align": "left", 
+                    "margin": "0px", 
+                    "--hover-color": "#F8F9FA", # Цвет при наведении мыши
+                    "border-radius": "0px",     # Делаем пункты прямоугольными внутри литого блока
+                    "padding": "12px 15px"
+                },
+                "nav-link-selected": {
+                    "background-color": "#F8F9FA", # Глубокий синий цвет для активного пункта ERP
+                    "color": "black",
+                    "font-weight": "600"
+                }
+            }
+        )
+
+    # 3. Динамическая отрисовка контента в правой колонке в зависимости от строки в selected_subtab
+    with col_content:
+        if selected_subtab == "Профиль компании":
+            
+            with st.form("form_profile"):
+                st.caption("Профиль компании")
+                st.text_input("Название компании", value="ООО Рога и Копыта")
+                st.text_input("ИНН", value="7701234567")
+                st.form_submit_button("Сохранить изменения", type="primary")
+                
+        elif selected_subtab == "Финансы и Налоги":
+            
+            with st.form("form_finance"):
+                st.caption("Финансы и Налоги")
+                st.selectbox("Валюта по умолчанию", ["RUB (₽)", "USD ($)", "EUR (€)"])
+                st.slider("Ставка НДС (%)", 0, 20, 20)
+                st.form_submit_button("Принять экономические правила", type="primary")
+                
+        elif selected_subtab == "Склад и Логистика":
+            
+            with st.form("form_logistic"):
+                st.caption("Склад и Логистика")
+                st.radio("Стратегия списания запасов", ["FIFO", "LIFO", "По средней стоимости"])
+                st.toggle("Разрешить отрицательные остатки", value=False)
+                st.form_submit_button("Сохранить параметры", type="primary")
+            
+            
 
 def settings_tab():
-    """Render settings and authentication tab with document templates."""
-    st.write("")
-    col1, col2 = st.columns([4, 2])
+    """Панель настроек: редактирование данных сотрудников (для админа) и личная смена пароля."""
+    
+    
+    is_admin = st.session_state.get("role") == "admin"
+    current_user_login = "admin" if is_admin else st.session_state.get("login_username_field", "user")
+    
+    # Инициализируем состояние редактирования в сессии, если его еще нет
+    if "edit_user_id" not in st.session_state:
+        st.session_state["edit_user_id"] = None
+    
+    # Распределяем пространство: 4 части слева (Панель админа), 2 части справа (Смена своего пароля)
+    col1, col2 = st.columns(2)
+    
+    # ==============================================================================
+    # ЛЕВАЯ КОЛОНКА: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (Доступно ТОЛЬКО Администратору)
+    # ==============================================================================
     with col1:    
-        st.write("")        
-    with col2:        
-        if st.session_state.role == "admin":
-            if st.button("Завершить сеанс", type="primary", width='stretch'):
-                st.session_state.role = "guest"
-                st.rerun()
+        if is_admin:
+            st.markdown("### 👥 Управление доступом сотрудников")
+            st.caption("Список учетных записей. Вы можете изменить ФИО, логин, роль или сбросить забытый пароль.")
+            
+            # 1. Читаем всех пользователей из базы данных (кроме самого суперадмина 'admin')
+            try:
+                with db.get_connection_context() as conn:
+                    df_users = pd.read_sql_query("""
+                        SELECT id, username, fio, role 
+                        FROM users 
+                        WHERE username != 'admin'
+                        ORDER BY fio ASC;
+                    """, conn)
+            except Exception as e:
+                st.error(f"Ошибка загрузки пользователей: {e}")
+                df_users = pd.DataFrame()
+
+            if df_users.empty:
+                st.info("ℹ️ В системе пока нет других зарегистрированных сотрудников.")
+            else:
+                # 2. Отрисовываем каждого пользователя красивой строчкой
+                for _, row in df_users.iterrows():
+                    user_id = row["id"]
+                    u_login = row["username"]
+                    u_fio = row["fio"]
+                    u_role = row["role"]
+                    
+                    with st.container(border=True):
+                        # ПРОВЕРКА: Если этот конкретный пользователь выбран для редактирования
+                        if st.session_state["edit_user_id"] == user_id:
+                            st.markdown(f"📝 **Редактирование профиля: `{u_login}`**")
+                            
+                            # Поля для изменения данных
+                            new_fio = st.text_input("ФИО сотрудника", value=u_fio, key=f"edit_fio_{user_id}").strip()
+                            new_login = st.text_input("Логин (Имя пользователя)", value=u_login, key=f"edit_login_{user_id}").strip()
+                            
+                            role_options = ["user", "admin"]
+                            role_labels = {"user": "Диспетчер (Пользователь)", "admin": "Администратор"}
+                            try:
+                                current_role_idx = role_options.index(u_role)
+                            except ValueError:
+                                current_role_idx = 0
+                                
+                            new_role = st.selectbox(
+                                "Права доступа", 
+                                options=role_options, 
+                                index=current_role_idx,
+                                format_func=lambda x: role_labels[x],
+                                key=f"edit_role_{user_id}"
+                            )
+                            
+                            # Кнопки сохранения и отмены
+                            btn_save_col, btn_cancel_col = st.columns(2)
+                            with btn_save_col:
+                                if st.button("💾 Сохранить", key=f"save_user_changes_{user_id}", type="primary", use_container_width=True):
+                                    if not new_fio or not new_login:
+                                        st.error("⚠️ Поля ФИО и Логин не могут быть пустыми!")
+                                    else:
+                                        try:
+                                            with db.get_connection_context() as conn:
+                                                cursor = conn.cursor()
+                                                cursor.execute("""
+                                                    UPDATE users 
+                                                    SET fio = ?, username = ?, role = ? 
+                                                    WHERE id = ?
+                                                """, (new_fio, new_login, new_role, user_id))
+                                            st.toast(f"✅ Данные сотрудника {new_login} обновлены!")
+                                            st.session_state["edit_user_id"] = None # Выходим из режима редактирования      
+                                            time.sleep(1.0)
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Ошибка при обновлении: логин уже занят или сбой БД. {e}")
+                            with btn_cancel_col:
+                                if st.button("❌ Отмена", key=f"cancel_user_changes_{user_id}", use_container_width=True):
+                                    st.session_state["edit_user_id"] = None
+                                    st.rerun()
+                        
+                        # ОБЫЧНЫЙ РЕЖИМ (Просмотр карточки)
+                        else:
+                            role_title = "Администратор" if u_role == "admin" else "Диспетчер (Пользователь)"
+                            row_col1, row_col2, row_col3 = st.columns([0.55, 0.23, 0.22], vertical_alignment="center")
+                            
+                            with row_col1:
+                                st.markdown(f"FIO: **{u_fio}** &nbsp;|&nbsp; Login: `{u_login}`")
+                                st.caption(f"Роль в системе: {role_title}")
+                                
+                            with row_col2:
+                                # Кнопка переключения в режим редактирования
+                                if st.button("✏️ Изменить", key=f"edit_user_trigger_{user_id}", use_container_width=True):
+                                    st.session_state["edit_user_id"] = user_id
+                                    st.rerun()
+                                    
+                            with row_col3:
+                                # Кнопка сброса пароля
+                                if st.button("🔄 Сброс", key=f"reset_user_pwd_btn_{user_id}", use_container_width=True):
+                                    temp_password = "123456"
+                                    temp_hash = hashlib.sha256(temp_password.encode()).hexdigest()
+                                    try:
+                                        with db.get_connection_context() as conn:
+                                            cursor = conn.cursor()
+                                            cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (temp_hash, user_id))
+                                        st.toast(f"🔑 Пароль для {u_login} сброшен на: {temp_password}", icon="🔑")
+                                        time.sleep(1.5)
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Ошибка сброса: {e}")
         else:
-            password = st.text_input(
-                "Пароль",                    
-                placeholder="", 
-                label_visibility="collapsed",
-                width="stretch"
-            )
-            if password:
-                try:
-                    if password.strip() == st.secrets["credentials"]["admin_password"]:
-                        st.session_state.role = "admin"
-                        st.rerun()
-                    else:
-                        st.error("Неверный пароль")
-                except KeyError:
-                    st.error("Ошибка конфигурации. Обратитесь к администратору.")
-                    logger.error("Secrets configuration missing admin_password")
+            st.write("")
+        
+    # ==============================================================================
+    # ПРАВАЯ КОЛОНКА: ЛИЧНАЯ СМЕНА ПАРОЛЯ (Доступно всем вошедшим)
+    # ==============================================================================
+    with col2:        
+        if st.session_state.get("auth_logged_in"):
+            with st.expander("Изменить пароль"):
+                with st.container(border=True):
+                    st.caption(f"Вы вошли как: **{st.session_state.get('user_fio')}**")
+                    
+                    new_pwd = st.text_input("Новый сложный пароль", type="password", placeholder="Минимум 6 знаков", key="set_tab_new_pwd")
+                    confirm_pwd = st.text_input("Повторите новый пароль", type="password", placeholder="Повтор...", key="set_tab_confirm_pwd")
+                    st.write(" ")
+                    
+                    if st.button("🖫 Сохранить мой пароль", type="primary", use_container_width=True):
+                        if not new_pwd or not confirm_pwd:
+                            st.error("⚠️ Заполните оба поля формы!")
+                        elif len(new_pwd) < 6:
+                            st.error("⚠️ Пароль слишком короткий!")
+                        elif new_pwd != confirm_pwd:
+                            st.error("❌ Введенные пароли не совпадают!")
+                        else:
+                            new_hash = hashlib.sha256(new_pwd.encode()).hexdigest()
+                            try:
+                                with db.get_connection_context() as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE users SET password_hash = ? WHERE username = ?", (new_hash, current_user_login))
+                                st.success("🎉 Ваш пароль успешно изменен!")
+                                time.sleep(1.5)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Ошибка записи в БД: {e}")
+        else:
+            st.warning("Пожалуйста, авторизуйтесь.")
 
-
-
-# --- ГЛАВНАЯ ФУНКЦИЯ ---
 
 def main():
-    """Main application entry point."""
-    # Page configuration
+    """Application entry point."""
+    # Настройка страницы
     st.set_page_config(page_title="MECHANIK", layout="wide", page_icon=":material/construction:")
-    
-        
-
-    
     
     # Load styles
     load_external_css(".streamlit/style.css")
     
-    # Initialize database
+        # Initialize database
     try:
         db.init_db()
     except Exception as e:
@@ -1624,11 +2057,45 @@ def main():
         logger.error(f"Database initialization failed: {e}")
         st.stop()
     
+    # 1. СТРОГО ЗДЕСЬ: Гарантируем наличие переменных для всей программы сразу
+    if "auth_logged_in" not in st.session_state: 
+        st.session_state["auth_logged_in"] = False
+    if "role" not in st.session_state: 
+        st.session_state["role"] = "user"
+    if "user_fio" not in st.session_state: 
+        st.session_state["user_fio"] = "Гость" # По умолчанию пишем универсальный статус
+
+    # 2. Перехватчик логаута (теперь он работает в полной безопасности)
+    if st.query_params.get("logout") == "1":
+        st.session_state["auth_logged_in"] = False
+        st.session_state["role"] = "user"
+        st.session_state["user_fio"] = "Гость"
+        st.query_params.clear()
+        st.rerun()
+
+    # 3. Проверка авторизации
+    if not st.session_state["auth_logged_in"]:
+        auth_page() # Вызываем форму входа, если еще не авторизованы
+        st.stop()
+        
+    # Загрузка информационной панели вверху страницы
+    info_panel()
+    
+    
+    # ==============================================================================
+    # РАБОЧАЯ ЗОНА СИСТЕМЫ (Открывается только после авторизации)
+    # ==============================================================================
+    # Возвращаем широкую разметку для больших таблиц данных
+    st.html("<style>.stMainBlockContainer { max-width: 100% !important; padding-top: 35px !important; }</style>")
+    
+
+    
+    
     # Создание шапки
-    app_header()
+    # app_header()
         
     # Создание главных вкладок
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["ТЕХНИКА", "РАБОТЫ", "ИНСТРУМЕНТЫ", "ДОКУМЕНТЫ", "НАСТРОЙКИ"], default="РАБОТЫ")
            
     with tab1:
         # Наполнение вкладки Техника
@@ -1645,11 +2112,10 @@ def main():
         docs_tab()
         
     with tab5:
-            # # Initialize session state
-        if "role" not in st.session_state:
-            st.session_state.role = "guest"
-        # Наполнение вкладки Настройки
         settings_tab()
 
+    app_footer()
+    
+    
 if __name__ == "__main__":
     main()
